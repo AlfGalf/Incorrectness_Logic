@@ -16,6 +16,8 @@ import lean.language
 
 namespace IncLoIncorrectness
 
+/-! # Language semantics -/
+
 inductive LogicType : Type
 | er
 | ok
@@ -25,19 +27,19 @@ inductive lang_semantics: IncLoLang.stmt -> LogicType -> (IncLoLang.state) -> (I
   lang_semantics IncLoLang.stmt.skip LogicType.ok s s
 | seq_ok {S T s t u} (H1: lang_semantics S LogicType.ok s t) (H2: lang_semantics T LogicType.ok t u) :
   lang_semantics(S ;; T) LogicType.ok s u
-| seq_er {S T s t u} (H1: lang_semantics S LogicType.ok s t) (H2: lang_semantics T LogicType.er t u) : 
+| seq_er_2 {S T s t u} (H1: lang_semantics S LogicType.ok s t) (H2: lang_semantics T LogicType.er t u) : 
   lang_semantics (S ;; T) LogicType.er s u
+| seq_er_1 {S T s t} (H1: lang_semantics S LogicType.er s t): 
+  lang_semantics (S ;; T) LogicType.er s t
 | error {s}:
   lang_semantics IncLoLang.stmt.error LogicType.er s s
 | assign {x s f} :
   lang_semantics (IncLoLang.stmt.assign x f) LogicType.ok s (s{x ↦ (f s)})
 
 def post (ty: LogicType) (r: IncLoLang.stmt) (P: IncLoLang.state -> Prop) : IncLoLang.state -> Prop 
-  := λ st, ∃ σ, P σ ∧ lang_semantics r ty σ st
+  := λ σ', ∃ σ, P σ ∧ lang_semantics r ty σ σ'
 
-/- TODO: Change encoding of state-/
-/- state × ℕ -> prop -/
-
+/-! ## Incerrectness logic and Hoare logic encodings -/
 def incorrectness_logic (type: LogicType) (P : (IncLoLang.state) → Prop) (R : IncLoLang.stmt)
   (Q : (IncLoLang.state) → Prop) : Prop := 
   ∀ state, Q state -> ((post type R) P) state
@@ -46,12 +48,14 @@ def hoare_logic (type: LogicType) (P : (IncLoLang.state) → Prop) (R : IncLoLan
   (Q : (IncLoLang.state) → Prop) : Prop := 
   ∀ state, ((post type R) P) state -> Q state
 
+/-! ## Notation -/
 notation `{* ` P : 1 ` *} ` S : 1 ` {* ` Q : 1 ` *}` ty: 2 :=
   hoare_logic ty P S Q
 
 notation `[* ` P : 1 ` *] ` S : 1 ` [* ` Q : 1 ` *]` ty: 2 :=
   incorrectness_logic ty P S Q
 
+/-! ## Lemmas-/
 lemma hoare_skip_intro_ok { P: IncLoLang.state -> Prop } : {* P *} IncLoLang.stmt.skip {* P *} LogicType.ok:=
 begin
   intros state h,
@@ -70,22 +74,153 @@ begin
 
   split,
   {finish,},
+  { exact lang_semantics.error },
+end
+
+lemma seq_intro_hoare {P Q R S T} (hS : {* P *} S {* Q *} LogicType.ok)
+    (hT : {* Q *} T {* R *} LogicType.ok) :
+  {* P *} S ;; T {* R *} LogicType.ok :=
+begin
+  intros end_state,
+  intro hST,
+  specialize hT end_state,
+  apply hT,
+  rcases hST with ⟨start_state, ⟨start_P, hST⟩ ⟩,
+  cases hST,
+  use hST_t,
+  split,  
   {
-    exact lang_semantics.error
+    specialize hS hST_t,
+    apply hS,
+    use start_state,
+    split,
+    {
+      exact start_P,
+    },
+    {
+      exact hST_H1,
+    },
+  },
+  {
+    exact hST_H2,
   },
 end
 
--- lemma seq_intro_hoare {P Q R S T} (hS : {* P *} S {* Q *} LogicType.ok)
---     (hT : {* Q *} T {* R *} LogicType.ok) :
---   {* P *} S ;; T {* R *} LogicType.ok :=
--- begin
---   intros s t hs hst,
---   cases' hst,
---   apply hT,
---   { apply hS,
---     { exact hs },
---     { assumption } },
---   { assumption }
--- end
+/-! ## Incorrectness rules -/
+
+/- Empty under approximates -/ 
+lemma empty_under_incorrect {P C ty} : [* P *] C [* λ st, false *] ty :=
+begin
+  intro state,
+  finish,
+end
+
+/- Consequence-/
+lemma consequence_incorrect {P Q C ty} 
+  {P': IncLoLang.state -> Prop} 
+  {Q': IncLoLang.state -> Prop} (h : [* P *] C [* Q *]ty) (hQ: ∀ st, Q' st -> Q st) (hP: ∀ st, P st -> P' st):
+  [* P' *] C [* Q' *]ty :=
+begin
+  intros state hQ',
+  specialize hQ state hQ',
+  specialize h state hQ,
+  rcases h with ⟨ start_state, ⟨ hP₂, lang ⟩ ⟩ ,
+  use start_state,
+  exact ⟨hP start_state hP₂, lang⟩,
+end
+
+/- Disjunction -/
+lemma disjunction_incorrect {P₁ P₂ Q₁ Q₂ C ty} 
+  (h₁ : [* P₁ *] C [* Q₁ *] ty) 
+  (h₂ : [* P₂ *] C [* Q₂ *] ty):
+  [* λ st, P₁ st ∨ P₂ st *] C [* λ st, Q₁ st ∨ Q₂ st *] ty :=
+begin
+  intros end_state hEnd,
+  cases hEnd,
+  {
+    specialize h₁ end_state hEnd,
+    rcases h₁ with ⟨ start_state, ⟨ hP, h₁⟩ ⟩,
+    use start_state,
+    split,
+    {
+      left,
+      exact hP,
+    },
+    {
+      exact h₁,
+    },
+  },
+  {
+    specialize h₂ end_state hEnd,
+    rcases h₂ with ⟨ start_state, ⟨ hP, h₂⟩ ⟩,
+    use start_state,
+    split,
+    {
+      right,
+      exact hP,
+    },
+    {
+      exact h₂,
+    },
+  },
+end
+
+/- Unit Ok -/
+lemma unit_incorrect_ok {P} : [* P *] IncLoLang.stmt.skip [* P *] LogicType.ok :=
+begin
+  intros end_state hP,
+  use end_state,
+  split,
+  { exact hP,},
+  {
+    exact lang_semantics.skip,
+  },
+end
+
+/- Unit Err -/
+lemma unit_incorrect_err {P} : [* P *] IncLoLang.stmt.skip [* λ _, false *] LogicType.er :=
+begin
+  intros end_state hP,
+  use end_state,
+end
+
+/- Sequencing short circuit -/ 
+lemma seq_short_circuit_incorrect {P R S} {T: IncLoLang.stmt} (hS : [* P *] S [* R *] LogicType.er) :
+  [* P *] S ;; T [* R *] LogicType.er :=
+begin
+  intros end_state hStartR,
+  specialize hS end_state hStartR,
+  rcases hS with ⟨ start_state, ⟨ hP, hS ⟩  ⟩ ,
+  use start_state,
+  exact ⟨ hP, lang_semantics.seq_er_1 hS⟩,
+end
+
+/- Sequencing normal -/ 
+lemma seq_normal_incorrect {P Q R S T ty} (hS : [* P *] S [* Q *] LogicType.ok)
+    (hT : [* Q *] T [* R *] ty) :
+  [* P *] S ;; T [* R *] ty :=
+begin
+  intros end_state hStartR,
+  specialize hT end_state hStartR,
+  rcases hT with ⟨ mid_state, ⟨ hMidQ, r⟩ ⟩,
+  specialize hS mid_state hMidQ,
+  rcases hS with ⟨ start_state, ⟨ hStartP, t⟩ ⟩,
+  use start_state,
+  split,
+  { 
+    exact hStartP,
+  },
+  {
+    cases ty,
+    {
+      exact lang_semantics.seq_er_2 t r
+    },
+    {
+      exact lang_semantics.seq_ok t r
+    },
+  },
+end
+
+
 
 end IncLoIncorrectness
