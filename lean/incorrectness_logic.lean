@@ -86,7 +86,7 @@ begin
   use state,
 
   split,
-  {finish,},
+  { finish, },
   { exact lang_semantics.error },
 end
 
@@ -107,12 +107,8 @@ begin
     apply hS,
     use start_state,
     split,
-    {
-      exact start_P,
-    },
-    {
-      exact hST_H1,
-    },
+    { exact start_P, },
+    { exact hST_H1, },
   },
   {
     exact hST_H2,
@@ -159,9 +155,7 @@ begin
       left,
       exact hP,
     },
-    {
-      exact h₁,
-    },
+    { exact h₁, },
   },
   {
     specialize h₂ end_state hEnd,
@@ -172,9 +166,7 @@ begin
       right,
       exact hP,
     },
-    {
-      exact h₂,
-    },
+    { exact h₂, },
   },
 end
 
@@ -185,9 +177,7 @@ begin
   use end_state,
   split,
   { exact hP,},
-  {
-    exact lang_semantics.skip,
-  },
+  { exact lang_semantics.skip, },
 end
 
 /- Unit Err -/
@@ -220,17 +210,11 @@ begin
   rcases hS with ⟨ start_state, ⟨ hStartP, t⟩ ⟩,
   use start_state,
   split,
-  { 
-    exact hStartP,
-  },
+  { exact hStartP, },
   {
     cases ty,
-    {
-      exact lang_semantics.seq_er_2 t r
-    },
-    {
-      exact lang_semantics.seq_ok t r
-    },
+    { exact lang_semantics.seq_er_2 t r },
+    { exact lang_semantics.seq_ok t r },
   },
 end
 
@@ -241,7 +225,7 @@ begin
   intros state hState,
   use state,
   split,
-  {exact hState,},
+  { exact hState, },
   { exact lang_semantics.star_base, },
 end
 
@@ -254,12 +238,8 @@ begin
   rcases h with ⟨ bState, ⟨ hBState, h ⟩ ⟩ ,
   use bState,
   split,
-  {
-    exact hBState,
-  },
-  {
-    exact lang_semantics.star_recurse h,
-  }
+  { exact hBState, },
+  { exact lang_semantics.star_recurse h, }
 end
 
 /- Choice left -/
@@ -271,12 +251,8 @@ begin
   rcases h with ⟨ bState, ⟨ hBState, h ⟩ ⟩ ,
   use bState,
   split,
-  {
-    exact hBState,
-  },
-  {
-    exact lang_semantics.choice_left h,
-  }
+  { exact hBState, },
+  { exact lang_semantics.choice_left h, }
 end
 
 /- Choice right -/
@@ -288,12 +264,8 @@ begin
   rcases h with ⟨ bState, ⟨ hBState, h ⟩ ⟩ ,
   use bState,
   split,
-  {
-    exact hBState,
-  },
-  {
-    exact lang_semantics.choice_right h,
-  }
+  { exact hBState, },
+  { exact lang_semantics.choice_right h, }
 end
 
 /- Error er -/
@@ -326,7 +298,7 @@ begin
   {exact lang_semantics.assumes_ok hB, },
 end
 
-/- Assume err -/
+/- Assume er -/
 lemma assume_incorrect_er {P B} :
   [* P *] (IncLoLang.stmt.assumes B)[* λ st, false *]LogicType.er :=
 begin
@@ -336,12 +308,14 @@ begin
 end
 
 /-! ### TODO: 
-[ ] Assignment
-[ ] Nondet Assignment
-[ ] Constancy
-[ ] Local variable !!
-[ ] Substitution 1
-[ ] Substitution 2
+
+- [ ] Assignment
+- [ ] Nondet Assignment
+- [ ] Constancy
+- [ ] Local variable !!
+- [ ] Substitution 1
+- [ ] Substitution 2
+
 -/
 
 end IncLoIncorrectness
