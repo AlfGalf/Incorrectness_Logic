@@ -38,9 +38,14 @@ inductive stmt : Type
 | assign : string → (state → ℕ) → stmt
 | seq    : stmt → stmt → stmt
 | error    : stmt
+| assumes : (state → Prop) → stmt
+| choice : stmt → stmt → stmt
+| star : stmt → stmt
 -- | ite    : (state → Prop) → stmt → stmt → stmt
 -- | while  : (state → Prop) → stmt → stmt
 
 infixr ` ;; ` : 90 := stmt.seq
+
+postfix `**` : 90 := stmt.star
 
 end IncLoLang

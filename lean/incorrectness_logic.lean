@@ -35,6 +35,19 @@ inductive lang_semantics: IncLoLang.stmt -> LogicType -> (IncLoLang.state) -> (I
   lang_semantics IncLoLang.stmt.error LogicType.er s s
 | assign {x s f} :
   lang_semantics (IncLoLang.stmt.assign x f) LogicType.ok s (s{x ↦ (f s)})
+| assumes_ok {s} {B: IncLoLang.state -> Prop} (h: B s) :
+  lang_semantics (IncLoLang.stmt.assumes B) LogicType.ok s s
+| choice_left {C₁ C₂ ty s₁ s₂} (h: (lang_semantics C₁ ty s₁ s₂)): 
+  lang_semantics (IncLoLang.stmt.choice C₁ C₂) ty s₁ s₂
+| choice_right {C₁ C₂ ty s₁ s₂} (h: (lang_semantics C₂ ty s₁ s₂)): 
+  lang_semantics (IncLoLang.stmt.choice C₁ C₂) ty s₁ s₂
+| star_base {C s ty} :
+  lang_semantics (IncLoLang.stmt.star C) ty s s
+| star_recurse {C s₁ s₂ ty} (h: lang_semantics (C**;;C) ty s₁ s₂):
+  lang_semantics (C**) ty s₁ s₂
+
+/- Q: What to do about locals? -/
+/- Q: Check def of demantics of C**? -/
 
 def post (ty: LogicType) (r: IncLoLang.stmt) (P: IncLoLang.state -> Prop) : IncLoLang.state -> Prop 
   := λ σ', ∃ σ, P σ ∧ lang_semantics r ty σ σ'
@@ -221,6 +234,114 @@ begin
   },
 end
 
+/- Iterate zero -/
+lemma iterate_zero_incorrect {C P} :
+  [* P *] (C**) [* P *]LogicType.ok :=
+begin
+  intros state hState,
+  use state,
+  split,
+  {exact hState,},
+  { exact lang_semantics.star_base, },
+end
 
+/- Iterate non-zero -/
+lemma iterate_non_zero_incorrect {C P Q ty} (h: [* P *] C** ;; C [* Q *]ty):
+  [* P *] (C**) [* Q *]ty :=
+begin
+  intros state hState,
+  specialize h state hState,
+  rcases h with ⟨ bState, ⟨ hBState, h ⟩ ⟩ ,
+  use bState,
+  split,
+  {
+    exact hBState,
+  },
+  {
+    exact lang_semantics.star_recurse h,
+  }
+end
+
+/- Choice left -/
+lemma choice_left_incorrect {C₁ C₂ P Q ty} (h: [* P *] C₁ [* Q *]ty):
+  [* P *] (C₁.choice C₂)  [* Q *]ty :=
+begin
+  intros state hState,
+  specialize h state hState,
+  rcases h with ⟨ bState, ⟨ hBState, h ⟩ ⟩ ,
+  use bState,
+  split,
+  {
+    exact hBState,
+  },
+  {
+    exact lang_semantics.choice_left h,
+  }
+end
+
+/- Choice right -/
+lemma choice_right_incorrect {C₁ C₂ P Q ty} (h: [* P *] C₂ [* Q *]ty):
+  [* P *] (IncLoLang.stmt.choice C₁ C₂)  [* Q *]ty :=
+begin
+  intros state hState,
+  specialize h state hState,
+  rcases h with ⟨ bState, ⟨ hBState, h ⟩ ⟩ ,
+  use bState,
+  split,
+  {
+    exact hBState,
+  },
+  {
+    exact lang_semantics.choice_right h,
+  }
+end
+
+/- Error er -/
+lemma error_er_incorrect {P}:
+  [* P *] (IncLoLang.stmt.error)  [* P *]LogicType.er :=
+begin
+  intros state hState,
+  use state,
+  split,
+  { exact hState, },
+  { exact lang_semantics.error, },
+end
+
+/- Error ok -/
+lemma error_ok_incorrect {P}:
+  [* P *] (IncLoLang.stmt.error)  [* λ st, false *]LogicType.ok :=
+begin
+  intros state hState,
+  use state,
+end
+
+/- Assume ok -/
+lemma assume_incorrect_ok {P B} :
+  [* P *] (IncLoLang.stmt.assumes B)[* (λ st, P st ∧ B st) *]LogicType.ok :=
+begin
+  rintros state ⟨ hState, hB⟩ ,
+  use state,
+  split,
+  {exact hState, },
+  {exact lang_semantics.assumes_ok hB, },
+end
+
+/- Assume err -/
+lemma assume_incorrect_er {P B} :
+  [* P *] (IncLoLang.stmt.assumes B)[* λ st, false *]LogicType.er :=
+begin
+  intros state hState,
+  use state,
+  /- The fact this is so easy is a little concerning -/
+end
+
+/-! ### TODO: 
+[ ] Assignment
+[ ] Nondet Assignment
+[ ] Constancy
+[ ] Local variable !!
+[ ] Substitution 1
+[ ] Substitution 2
+-/
 
 end IncLoIncorrectness
