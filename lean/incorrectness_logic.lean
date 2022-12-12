@@ -311,6 +311,7 @@ end
 
 /-! ## Variables and Mutation -/
 
+/- This is the definition of P[x/x'] used in the paper -/
 def p_thing (P: IncLoLang.state -> Prop) (e: IncLoLang.state -> ℕ) (x: string) : IncLoLang.state -> Prop :=
   λ σ', ∃ σ, P σ ∧ σ' = σ{x ↦ e σ}
 
@@ -318,7 +319,7 @@ notation P `{` name ` ↦ ` ex `}` := p_thing P ex name
 
 /- Assignment -/
 lemma assignment_correct {P x e} :
-  [* P *](IncLoLang.stmt.assign x e)[* λ σ, (∃ x', (P{x ↦ x'} σ) ∧ σ x = (e (σ{x ↦ e σ}))) *] LogicType.ok :=
+  [* P *](IncLoLang.stmt.assign x e)[* λ σ', (∃ x', (P{x ↦ x'} σ') ∧ σ' x = (e (σ'{x ↦ e σ'}))) *] LogicType.ok :=
 begin
   rintros σ' hσ',
 
