@@ -33,8 +33,8 @@ inductive lang_semantics: IncLoLang.stmt -> LogicType -> (IncLoLang.state) -> (I
   lang_semantics (S ;; T) LogicType.er s t
 | error {s}:
   lang_semantics IncLoLang.stmt.error LogicType.er s s
-| assign {x s f} :
-  lang_semantics (IncLoLang.stmt.assign x f) LogicType.ok s (s{x ↦ (f s)})
+| assign {x s e} :
+  lang_semantics (IncLoLang.stmt.assign x e) LogicType.ok s (s{x ↦ (e s)})
 | assumes_ok {s} {B: IncLoLang.state -> Prop} (h: B s) :
   lang_semantics (IncLoLang.stmt.assumes B) LogicType.ok s s
 | choice_left {C₁ C₂ ty s₁ s₂} (h: (lang_semantics C₁ ty s₁ s₂)): 
@@ -49,10 +49,12 @@ inductive lang_semantics: IncLoLang.stmt -> LogicType -> (IncLoLang.state) -> (I
 /- Q: What to do about locals? -/
 /- Q: Check def of demantics of C**? -/
 
-def post (ty: LogicType) (r: IncLoLang.stmt) (P: IncLoLang.state -> Prop) : IncLoLang.state -> Prop 
-  := λ σ', ∃ σ, P σ ∧ lang_semantics r ty σ σ'
+/- the def of post from the paper-/
+def post (ty: LogicType) (r: IncLoLang.stmt) (p: IncLoLang.state -> Prop) : IncLoLang.state -> Prop 
+  := λ σ', ∃ σ, p σ ∧ lang_semantics r ty σ σ'
 
-/-! ## Incerrectness logic and Hoare logic encodings -/
+
+/-! ## Incorrectness logic and Hoare logic encodings -/
 def incorrectness_logic (type: LogicType) (P : (IncLoLang.state) → Prop) (R : IncLoLang.stmt)
   (Q : (IncLoLang.state) → Prop) : Prop := 
   ∀ state, Q state -> ((post type R) P) state
@@ -305,6 +307,34 @@ begin
   intros state hState,
   use state,
   /- The fact this is so easy is a little concerning -/
+end
+
+/-! ## Variables and Mutation -/
+
+def p_thing (P: IncLoLang.state -> Prop) (e: IncLoLang.state -> ℕ) (x: string) : IncLoLang.state -> Prop :=
+  λ σ', ∃ σ, P σ ∧ σ' = σ{x ↦ e σ}
+
+notation P `{` name ` ↦ ` ex `}` := p_thing P ex name
+
+/- Assignment -/
+lemma assignment_correct {P x e} :
+  [* P *](IncLoLang.stmt.assign x e)[* λ σ, (∃ x', (P{x ↦ x'} σ) ∧ σ x = (e (σ{x ↦ e σ}))) *] LogicType.ok :=
+begin
+  rintros σ' hσ',
+
+  rcases hσ' with ⟨x', ⟨ hPσ', hES⟩ ⟩ ,
+
+  rcases hPσ' with ⟨ σ, ⟨ hPσ, hσσ' ⟩ ⟩,
+  use σ,
+
+  split,
+  {
+    exact hPσ,
+  },
+  {
+    sorry,
+    /- Here be the problem -/
+  },
 end
 
 /-! ### TODO: 
