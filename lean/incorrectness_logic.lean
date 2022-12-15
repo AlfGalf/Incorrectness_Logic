@@ -342,11 +342,6 @@ begin
     exact hPσ,
   },
   {
-    -- rw hσσ' at hES,
-    -- simp at hES,
-    -- rw ← hσσ' at hES,
-
-    -- /- hES IS WRONG -/
     have H2: σ' = σ{x ↦ e σ}, {
       apply funext,
       intro v,
