@@ -311,21 +311,30 @@ end
 
 /-! ## Variables and Mutation -/
 
-/- This is the definition of P[x/x'] used in the paper -/
-def p_thing (P: IncLoLang.state -> Prop) (e: IncLoLang.state -> ℕ) (x: string) : IncLoLang.state -> Prop :=
-  λ σ', ∃ σ, P σ ∧ σ' = σ{x ↦ e σ}
+/- This is the definition of P[x'/x] used in the paper -/
+def p_thing (P: IncLoLang.state -> Prop) (x': ℕ) (x: string) : IncLoLang.state -> Prop :=
+  -- λ σ', ∃ σ, P σ ∧ σ' = σ{x ↦ x'}
+  λ σ', ∃ σ, P σ ∧ σ = σ'{x ↦ x'}
 
-notation P `{` name ` ↦ ` ex `}` := p_thing P ex name
+notation P `{` name ` ↦ ` val `}` := p_thing P val name
 
 /- Assignment -/
 lemma assignment_correct {P x e} :
-  [* P *](IncLoLang.stmt.assign x e)[* λ σ', (∃ x', (P{x ↦ x'} σ') ∧ σ' x = (e (σ'{x ↦ e σ'}))) *] LogicType.ok :=
+  [* P *](IncLoLang.stmt.assign x e)[* λ σ', (∃ x', (P{x ↦ x'} σ') ∧ σ' x = (e (σ'{x ↦ x'}))) *] LogicType.ok :=
 begin
+  /- Given there exists a x' st P{x ↦ x'} σ' and σ' = e (σ'{x ↦ x'}) -/
+  /- x' is the value of x *before* assignment -/
   rintros σ' hσ',
 
+  /- recover the x' -/
   rcases hσ' with ⟨x', ⟨ hPσ', hES⟩ ⟩ ,
+  simp at hES,
 
+  /- hES says that the value of x' after assignment is the value of e with state σ'{x ↦ x'} -/
+
+  /- Recover the start state -/
   rcases hPσ' with ⟨ σ, ⟨ hPσ, hσσ' ⟩ ⟩,
+
   use σ,
 
   split,
@@ -333,8 +342,21 @@ begin
     exact hPσ,
   },
   {
-    sorry,
-    /- Here be the problem -/
+    -- rw hσσ' at hES,
+    -- simp at hES,
+    -- rw ← hσσ' at hES,
+
+    -- /- hES IS WRONG -/
+    have H2: σ' = σ{x ↦ e σ}, {
+      apply funext,
+      intro v,
+      by_cases v = x,
+      {finish,},
+      {finish,}
+    },
+    rw H2,
+
+    exact lang_semantics.assign
   },
 end
 
@@ -346,6 +368,7 @@ end
 - [ ] Local variable !!
 - [ ] Substitution 1
 - [ ] Substitution 2
+- [ ] Backwards varient
 
 -/
 

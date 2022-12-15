@@ -52,12 +52,6 @@ begin
   finish,
 end
 
-lemma test :
-  (if ff then 1 else 2) = 2 :=
-begin
-  exact if_neg (bool.not_ff),
-end
-
 @[simp] lemma update_apply_ne (name name' : string) (val : ℕ) (s : state)
     (h : name' ≠ name) :
   s{name ↦ val} name' = s name' :=
@@ -102,15 +96,13 @@ by apply funext; simp
 /-! ## Language -/
 
 inductive stmt : Type
-| skip   : stmt
-| assign : string → (state → ℕ) → stmt
-| seq    : stmt → stmt → stmt
-| error    : stmt
-| assumes : (state → Prop) → stmt
-| choice : stmt → stmt → stmt
-| star : stmt → stmt
--- | ite    : (state → Prop) → stmt → stmt → stmt
--- | while  : (state → Prop) → stmt → stmt
+| skip      : stmt
+| assign    : string → (state → ℕ) → stmt
+| seq       : stmt → stmt → stmt
+| error     : stmt
+| assumes   : (state → Prop) → stmt
+| choice    : stmt → stmt → stmt
+| star      : stmt → stmt
 
 infixr ` ;; ` : 90 := stmt.seq
 
