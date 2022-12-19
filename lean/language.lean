@@ -96,16 +96,83 @@ by apply funext; simp
 /-! ## Language -/
 
 inductive stmt : Type
-| skip      : stmt
-| assign    : string → (state → ℕ) → stmt
-| seq       : stmt → stmt → stmt
-| error     : stmt
-| assumes   : (state → Prop) → stmt
-| choice    : stmt → stmt → stmt
-| star      : stmt → stmt
+| skip            : stmt
+| assign          : string → (state → ℕ) → stmt
+| non_det_assign  : string → stmt
+| seq             : stmt → stmt → stmt
+| error           : stmt
+| assumes         : (state → Prop) → stmt
+| choice          : stmt → stmt → stmt
+| star            : stmt → stmt
 
 infixr ` ;; ` : 90 := stmt.seq
 
+infixr ` <+> ` : 90 := stmt.choice
+
 postfix `**` : 90 := stmt.star
+
+notation `[` x ` ↣ ` e `]` := stmt.assign x e
+
+/- This is the definition of P[x'/x] used in the paper -/
+def p_thing (P: IncLoLang.state -> Prop) (x': ℕ) (x: string) : IncLoLang.state -> Prop :=
+  -- λ σ', ∃ σ, P σ ∧ σ' = σ{x ↦ x'}
+  -- This is the definition given int he paper but it is wrong
+  λ σ', ∃ σ, P σ ∧ σ = σ'{x ↦ x'}
+
+notation P `{` name ` ↦ ` val `}` := p_thing P val name
+
+/-! # Language semantics -/
+
+inductive LogicType : Type
+| er
+| ok
+
+inductive lang_semantics: IncLoLang.stmt -> LogicType -> (IncLoLang.state) -> (IncLoLang.state) -> Prop
+| skip {s} :
+  lang_semantics IncLoLang.stmt.skip LogicType.ok s s
+| seq_ok {S T s t u} (H1: lang_semantics S LogicType.ok s t) (H2: lang_semantics T LogicType.ok t u) :
+  lang_semantics(S ;; T) LogicType.ok s u
+| seq_er_2 {S T s t u} (H1: lang_semantics S LogicType.ok s t) (H2: lang_semantics T LogicType.er t u) : 
+  lang_semantics (S ;; T) LogicType.er s u
+| seq_er_1 {S T s t} (H1: lang_semantics S LogicType.er s t): 
+  lang_semantics (S ;; T) LogicType.er s t
+| error {s}:
+  lang_semantics IncLoLang.stmt.error LogicType.er s s
+| assign {x s e} :
+  lang_semantics (IncLoLang.stmt.assign x e) LogicType.ok s (s{x ↦ (e s)})
+| non_det_assign {x s v} :
+  lang_semantics (IncLoLang.stmt.non_det_assign x) LogicType.ok s (s{x ↦ v})
+| assumes_ok {s} {B: IncLoLang.state -> Prop} (h: B s) :
+  lang_semantics (IncLoLang.stmt.assumes B) LogicType.ok s s
+| choice_left {C₁ C₂ ty s₁ s₂} (h: (lang_semantics C₁ ty s₁ s₂)): 
+  lang_semantics (IncLoLang.stmt.choice C₁ C₂) ty s₁ s₂
+| choice_right {C₁ C₂ ty s₁ s₂} (h: (lang_semantics C₂ ty s₁ s₂)): 
+  lang_semantics (IncLoLang.stmt.choice C₁ C₂) ty s₁ s₂
+| star_base {C s ty} :
+  lang_semantics (IncLoLang.stmt.star C) ty s s
+| star_recurse {C s₁ s₂ ty} (h: lang_semantics (C**;;C) ty s₁ s₂):
+  lang_semantics (C**) ty s₁ s₂
+
+def free (P: state -> Prop) (x: string) : Prop := 
+  ∀ v, ∀ st, (P st) ↔ (P (st{x ↦ v}))
+
+def Free (C: state -> Prop) (x: string) : Prop :=
+  ∀ σ: state, ∀ v, (C σ ↔ C (σ{x ↦ v}))
+
+inductive Mod: stmt → string → Prop
+| seq_left {C₁ C₂ x} (H: Mod C₁ x):
+  Mod (C₁ ;; C₂) x
+| seq_right {C₁ C₂ x} (H: Mod C₂ x) :
+  Mod (C₁ ;; C₂) x
+| choice_left {C₁ C₂ x} (H: Mod C₁ x) :
+  Mod (C₁ <+> C₂) x
+| choice_right {C₁ C₂ x} (H: Mod C₂ x) :
+  Mod (C₁ <+> C₂) x
+| star {C x} (H: Mod C x) :
+  Mod (C**) x
+| assign {x e}:
+  Mod [x ↣ e] x
+| non_det_assign {x}:
+  Mod (stmt.non_det_assign x) x
 
 end IncLoLang

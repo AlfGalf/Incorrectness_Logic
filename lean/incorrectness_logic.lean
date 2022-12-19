@@ -14,64 +14,32 @@ import tactic.where
 
 import lean.language
 
-namespace IncLoIncorrectness
-
-/-! # Language semantics -/
-
-inductive LogicType : Type
-| er
-| ok
-
-inductive lang_semantics: IncLoLang.stmt -> LogicType -> (IncLoLang.state) -> (IncLoLang.state) -> Prop
-| skip {s} :
-  lang_semantics IncLoLang.stmt.skip LogicType.ok s s
-| seq_ok {S T s t u} (H1: lang_semantics S LogicType.ok s t) (H2: lang_semantics T LogicType.ok t u) :
-  lang_semantics(S ;; T) LogicType.ok s u
-| seq_er_2 {S T s t u} (H1: lang_semantics S LogicType.ok s t) (H2: lang_semantics T LogicType.er t u) : 
-  lang_semantics (S ;; T) LogicType.er s u
-| seq_er_1 {S T s t} (H1: lang_semantics S LogicType.er s t): 
-  lang_semantics (S ;; T) LogicType.er s t
-| error {s}:
-  lang_semantics IncLoLang.stmt.error LogicType.er s s
-| assign {x s e} :
-  lang_semantics (IncLoLang.stmt.assign x e) LogicType.ok s (s{x ↦ (e s)})
-| assumes_ok {s} {B: IncLoLang.state -> Prop} (h: B s) :
-  lang_semantics (IncLoLang.stmt.assumes B) LogicType.ok s s
-| choice_left {C₁ C₂ ty s₁ s₂} (h: (lang_semantics C₁ ty s₁ s₂)): 
-  lang_semantics (IncLoLang.stmt.choice C₁ C₂) ty s₁ s₂
-| choice_right {C₁ C₂ ty s₁ s₂} (h: (lang_semantics C₂ ty s₁ s₂)): 
-  lang_semantics (IncLoLang.stmt.choice C₁ C₂) ty s₁ s₂
-| star_base {C s ty} :
-  lang_semantics (IncLoLang.stmt.star C) ty s s
-| star_recurse {C s₁ s₂ ty} (h: lang_semantics (C**;;C) ty s₁ s₂):
-  lang_semantics (C**) ty s₁ s₂
-
 /- Q: What to do about locals? -/
 /- Q: Check def of demantics of C**? -/
 
 /- the def of post from the paper-/
-def post (ty: LogicType) (r: IncLoLang.stmt) (p: IncLoLang.state -> Prop) : IncLoLang.state -> Prop 
-  := λ σ', ∃ σ, p σ ∧ lang_semantics r ty σ σ'
+def post (ty: IncLoLang.LogicType) (r: IncLoLang.stmt) (p: IncLoLang.state -> Prop) : IncLoLang.state -> Prop 
+  := λ σ', ∃ σ, p σ ∧ IncLoLang.lang_semantics r ty σ σ'
 
 
 /-! ## Incorrectness logic and Hoare logic encodings -/
-def incorrectness_logic (type: LogicType) (P : (IncLoLang.state) → Prop) (R : IncLoLang.stmt)
+def incorrectness_stmt (type: IncLoLang.LogicType) (P : (IncLoLang.state) → Prop) (R : IncLoLang.stmt)
   (Q : (IncLoLang.state) → Prop) : Prop := 
   ∀ state, Q state -> ((post type R) P) state
 
-def hoare_logic (type: LogicType) (P : (IncLoLang.state) → Prop) (R : IncLoLang.stmt)
+def hoare_stmt (type: IncLoLang.LogicType) (P : (IncLoLang.state) → Prop) (R : IncLoLang.stmt)
   (Q : (IncLoLang.state) → Prop) : Prop := 
   ∀ state, ((post type R) P) state -> Q state
 
 /-! ## Notation -/
 notation `{* ` P : 1 ` *} ` S : 1 ` {* ` Q : 1 ` *}` ty: 2 :=
-  hoare_logic ty P S Q
+  hoare_stmt ty P S Q
 
 notation `[* ` P : 1 ` *] ` S : 1 ` [* ` Q : 1 ` *]` ty: 2 :=
-  incorrectness_logic ty P S Q
+  incorrectness_stmt ty P S Q
 
 /-! ## Lemmas-/
-lemma hoare_skip_intro_ok { P: IncLoLang.state -> Prop } : {* P *} IncLoLang.stmt.skip {* P *} LogicType.ok:=
+lemma hoare_skip_intro_ok { P: IncLoLang.state -> Prop } : {* P *} IncLoLang.stmt.skip {* P *} IncLoLang.LogicType.ok:=
 begin
   intros state h,
 
@@ -81,7 +49,7 @@ begin
   finish,
 end
 
-lemma inc_skip_intro_er { P: IncLoLang.state -> Prop } : [* P *] IncLoLang.stmt.error [* P *] LogicType.er :=
+lemma inc_skip_intro_er { P: IncLoLang.state -> Prop } : [* P *] IncLoLang.stmt.error [* P *] IncLoLang.LogicType.er :=
 begin
   intros state h,
 
@@ -89,12 +57,12 @@ begin
 
   split,
   { finish, },
-  { exact lang_semantics.error },
+  { exact IncLoLang.lang_semantics.error },
 end
 
-lemma seq_intro_hoare {P Q R S T} (hS : {* P *} S {* Q *} LogicType.ok)
-    (hT : {* Q *} T {* R *} LogicType.ok) :
-  {* P *} S ;; T {* R *} LogicType.ok :=
+lemma seq_intro_hoare {P Q R S T} (hS : {* P *} S {* Q *} IncLoLang.LogicType.ok)
+    (hT : {* Q *} T {* R *} IncLoLang.LogicType.ok) :
+  {* P *} S ;; T {* R *} IncLoLang.LogicType.ok :=
 begin
   intros end_state,
   intro hST,
@@ -173,35 +141,35 @@ begin
 end
 
 /- Unit Ok -/
-lemma unit_incorrect_ok {P} : [* P *] IncLoLang.stmt.skip [* P *] LogicType.ok :=
+lemma unit_incorrect_ok {P} : [* P *] IncLoLang.stmt.skip [* P *] IncLoLang.LogicType.ok :=
 begin
   intros end_state hP,
   use end_state,
   split,
   { exact hP,},
-  { exact lang_semantics.skip, },
+  { exact IncLoLang.lang_semantics.skip, },
 end
 
 /- Unit Err -/
-lemma unit_incorrect_err {P} : [* P *] IncLoLang.stmt.skip [* λ _, false *] LogicType.er :=
+lemma unit_incorrect_err {P} : [* P *] IncLoLang.stmt.skip [* λ _, false *] IncLoLang.LogicType.er :=
 begin
   intros end_state hP,
   use end_state,
 end
 
 /- Sequencing short circuit -/ 
-lemma seq_short_circuit_incorrect {P R S} {T: IncLoLang.stmt} (hS : [* P *] S [* R *] LogicType.er) :
-  [* P *] S ;; T [* R *] LogicType.er :=
+lemma seq_short_circuit_incorrect {P R S} {T: IncLoLang.stmt} (hS : [* P *] S [* R *] IncLoLang.LogicType.er) :
+  [* P *] S ;; T [* R *] IncLoLang.LogicType.er :=
 begin
   intros end_state hStartR,
   specialize hS end_state hStartR,
   rcases hS with ⟨ start_state, ⟨ hP, hS ⟩  ⟩ ,
   use start_state,
-  exact ⟨ hP, lang_semantics.seq_er_1 hS⟩,
+  exact ⟨ hP, IncLoLang.lang_semantics.seq_er_1 hS⟩,
 end
 
 /- Sequencing normal -/ 
-lemma seq_normal_incorrect {P Q R S T ty} (hS : [* P *] S [* Q *] LogicType.ok)
+lemma seq_normal_incorrect {P Q R S T ty} (hS : [* P *] S [* Q *] IncLoLang.LogicType.ok)
     (hT : [* Q *] T [* R *] ty) :
   [* P *] S ;; T [* R *] ty :=
 begin
@@ -215,20 +183,20 @@ begin
   { exact hStartP, },
   {
     cases ty,
-    { exact lang_semantics.seq_er_2 t r },
-    { exact lang_semantics.seq_ok t r },
+    { exact IncLoLang.lang_semantics.seq_er_2 t r },
+    { exact IncLoLang.lang_semantics.seq_ok t r },
   },
 end
 
 /- Iterate zero -/
 lemma iterate_zero_incorrect {C P} :
-  [* P *] (C**) [* P *]LogicType.ok :=
+  [* P *] (C**) [* P *]IncLoLang.LogicType.ok :=
 begin
   intros state hState,
   use state,
   split,
   { exact hState, },
-  { exact lang_semantics.star_base, },
+  { exact IncLoLang.lang_semantics.star_base, },
 end
 
 /- Iterate non-zero -/
@@ -241,7 +209,7 @@ begin
   use bState,
   split,
   { exact hBState, },
-  { exact lang_semantics.star_recurse h, }
+  { exact IncLoLang.lang_semantics.star_recurse h, }
 end
 
 /- Choice left -/
@@ -254,7 +222,7 @@ begin
   use bState,
   split,
   { exact hBState, },
-  { exact lang_semantics.choice_left h, }
+  { exact IncLoLang.lang_semantics.choice_left h, }
 end
 
 /- Choice right -/
@@ -267,23 +235,23 @@ begin
   use bState,
   split,
   { exact hBState, },
-  { exact lang_semantics.choice_right h, }
+  { exact IncLoLang.lang_semantics.choice_right h, }
 end
 
 /- Error er -/
 lemma error_er_incorrect {P}:
-  [* P *] (IncLoLang.stmt.error)  [* P *]LogicType.er :=
+  [* P *] (IncLoLang.stmt.error)  [* P *]IncLoLang.LogicType.er :=
 begin
   intros state hState,
   use state,
   split,
   { exact hState, },
-  { exact lang_semantics.error, },
+  { exact IncLoLang.lang_semantics.error, },
 end
 
 /- Error ok -/
 lemma error_ok_incorrect {P}:
-  [* P *] (IncLoLang.stmt.error)  [* λ st, false *]LogicType.ok :=
+  [* P *] (IncLoLang.stmt.error)  [* λ st, false *]IncLoLang.LogicType.ok :=
 begin
   intros state hState,
   use state,
@@ -291,18 +259,18 @@ end
 
 /- Assume ok -/
 lemma assume_incorrect_ok {P B} :
-  [* P *] (IncLoLang.stmt.assumes B)[* (λ st, P st ∧ B st) *]LogicType.ok :=
+  [* P *] (IncLoLang.stmt.assumes B)[* (λ st, P st ∧ B st) *]IncLoLang.LogicType.ok :=
 begin
   rintros state ⟨ hState, hB⟩ ,
   use state,
   split,
   {exact hState, },
-  {exact lang_semantics.assumes_ok hB, },
+  {exact IncLoLang.lang_semantics.assumes_ok hB, },
 end
 
 /- Assume er -/
 lemma assume_incorrect_er {P B} :
-  [* P *] (IncLoLang.stmt.assumes B)[* λ st, false *]LogicType.er :=
+  [* P *] (IncLoLang.stmt.assumes B)[* λ st, false *]IncLoLang.LogicType.er :=
 begin
   intros state hState,
   use state,
@@ -311,16 +279,10 @@ end
 
 /-! ## Variables and Mutation -/
 
-/- This is the definition of P[x'/x] used in the paper -/
-def p_thing (P: IncLoLang.state -> Prop) (x': ℕ) (x: string) : IncLoLang.state -> Prop :=
-  -- λ σ', ∃ σ, P σ ∧ σ' = σ{x ↦ x'}
-  λ σ', ∃ σ, P σ ∧ σ = σ'{x ↦ x'}
-
-notation P `{` name ` ↦ ` val `}` := p_thing P val name
 
 /- Assignment -/
 lemma assignment_correct {P x e} :
-  [* P *](IncLoLang.stmt.assign x e)[* λ σ', (∃ x', (P{x ↦ x'} σ') ∧ σ' x = (e (σ'{x ↦ x'}))) *] LogicType.ok :=
+  [* P *](IncLoLang.stmt.assign x e)[* λ σ', (∃ x', (P{x ↦ x'} σ') ∧ σ' x = (e (σ'{x ↦ x'}))) *] IncLoLang.LogicType.ok :=
 begin
   /- Given there exists a x' st P{x ↦ x'} σ' and σ' = e (σ'{x ↦ x'}) -/
   /- x' is the value of x *before* assignment -/
@@ -351,14 +313,60 @@ begin
     },
     rw H2,
 
-    exact lang_semantics.assign
+    exact IncLoLang.lang_semantics.assign
   },
 end
 
+/- Assignment er -/
+lemma assignment_incorrect_er {P x e} :
+  [* P *](IncLoLang.stmt.assign x e)[* λ_, false *] IncLoLang.LogicType.er :=
+begin
+  finish,
+end
+
+lemma non_det_assignment_incorrect {P x} :
+  [* P *](IncLoLang.stmt.non_det_assign x)[* λ σ, ∃ x', P{x ↦ x'} σ *] IncLoLang.LogicType.ok :=
+begin
+  /- Given there exists a x' st P{x ↦ x'} σ' and σ' = e (σ'{x ↦ x'}) -/
+  /- x' is the value of x *before* assignment -/
+  rintros σ' hσ',
+
+  /- recover the x' -/
+  rcases hσ' with ⟨x', hPσ'⟩ ,
+
+  /- Recover the start state -/
+  rcases hPσ' with ⟨ σ, ⟨ hPσ, hσσ' ⟩ ⟩,
+
+  use σ,
+
+  split,
+  {
+    exact hPσ,
+  },
+  {
+    have H: σ' = σ{x ↦ σ' x}, {
+      apply funext,
+      intro v,
+      by_cases x = v,
+      {finish,},
+      {finish,}
+    },
+    rw H,
+    exact IncLoLang.lang_semantics.non_det_assign
+  },
+end
+
+-- lemma constancy {P Q F: IncLoLang.state -> Prop} {C: IncLoLang.stmt} 
+--   (H1: ∀ x, ¬IncLoLang.Mod(C)(x) || ¬IncLoLang.Free(F)(x)) (H2: [* P *]C[* Q *]):
+--   [* λ st, P st ∧ F st *]C[* λ st, Q st ∧ F st *] :=
+-- begin
+--   sorry
+-- end
+
 /-! ### TODO: 
 
-- [ ] Assignment
-- [ ] Nondet Assignment
+- [x] Assignment
+- [x] Nondet Assignment
 - [ ] Constancy
 - [ ] Local variable !!
 - [ ] Substitution 1
@@ -366,5 +374,3 @@ end
 - [ ] Backwards varient
 
 -/
-
-end IncLoIncorrectness
