@@ -119,7 +119,7 @@ def p_thing (P: IncLoLang.state -> Prop) (x': ℕ) (x: string) : IncLoLang.state
   -- This is the definition given int he paper but it is wrong
   λ σ', ∃ σ, P σ ∧ σ = σ'{x ↦ x'}
 
-notation P `{` name ` ↦ ` val `}` := p_thing P val name
+notation P `{` name ` ↣ ` val `}` := p_thing P val name
 
 /-! # Language semantics -/
 

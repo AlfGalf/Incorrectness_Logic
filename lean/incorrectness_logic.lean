@@ -282,7 +282,7 @@ end
 
 /- Assignment -/
 lemma assignment_correct {P x e} :
-  [* P *](IncLoLang.stmt.assign x e)[* λ σ', (∃ x', (P{x ↦ x'} σ') ∧ σ' x = (e (σ'{x ↦ x'}))) *] IncLoLang.LogicType.ok :=
+  [* P *](IncLoLang.stmt.assign x e)[* λ σ', (∃ x', (P{x ↣ x'} σ') ∧ σ' x = (e (σ'{x ↦ x'}))) *] IncLoLang.LogicType.ok :=
 begin
   /- Given there exists a x' st P{x ↦ x'} σ' and σ' = e (σ'{x ↦ x'}) -/
   /- x' is the value of x *before* assignment -/
@@ -290,7 +290,6 @@ begin
 
   /- recover the x' -/
   rcases hσ' with ⟨x', ⟨ hPσ', hES⟩ ⟩ ,
-  simp at hES,
 
   /- hES says that the value of x' after assignment is the value of e with state σ'{x ↦ x'} -/
 
@@ -325,7 +324,7 @@ begin
 end
 
 lemma non_det_assignment_incorrect {P x} :
-  [* P *](IncLoLang.stmt.non_det_assign x)[* λ σ, ∃ x', P{x ↦ x'} σ *] IncLoLang.LogicType.ok :=
+  [* P *](IncLoLang.stmt.non_det_assign x)[* λ σ, ∃ x', P{x ↣ x'} σ *] IncLoLang.LogicType.ok :=
 begin
   /- Given there exists a x' st P{x ↦ x'} σ' and σ' = e (σ'{x ↦ x'}) -/
   /- x' is the value of x *before* assignment -/
