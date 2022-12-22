@@ -159,20 +159,32 @@ def free (P: state -> Prop) (x: string) : Prop :=
 def Free (C: state -> Prop) (x: string) : Prop :=
   ∀ σ: state, ∀ v, (C σ ↔ C (σ{x ↦ v}))
 
-inductive Mod: stmt → string → Prop
-| seq_left {C₁ C₂ x} (H: Mod C₁ x):
-  Mod (C₁ ;; C₂) x
-| seq_right {C₁ C₂ x} (H: Mod C₂ x) :
-  Mod (C₁ ;; C₂) x
-| choice_left {C₁ C₂ x} (H: Mod C₁ x) :
-  Mod (C₁ <+> C₂) x
-| choice_right {C₁ C₂ x} (H: Mod C₂ x) :
-  Mod (C₁ <+> C₂) x
-| star {C x} (H: Mod C x) :
-  Mod (C**) x
-| assign {x e}:
-  Mod [x ↣ e] x
-| non_det_assign {x}:
-  Mod (stmt.non_det_assign x) x
+def Mod (C: stmt) (x: string) : Prop :=
+  ∃ st st': state, lang_semantics C LogicType.ok st st' ∧ st x ≠ st' x
+
+lemma mod_assign {x: string} {v: ℕ} : 
+  Mod [x ↣ v] x :=
+begin
+  use (λ _, v+1),
+  use ((λ _, v+1) {x ↦ v}),
+
+  exact ⟨ lang_semantics.assign, by simp ⟩,
+end
+
+-- inductive Mod: stmt → string → Prop
+-- | seq_left {C₁ C₂ x} (H: Mod C₁ x):
+--   Mod (C₁ ;; C₂) x
+-- | seq_right {C₁ C₂ x} (H: Mod C₂ x) :
+--   Mod (C₁ ;; C₂) x
+-- | choice_left {C₁ C₂ x} (H: Mod C₁ x) :
+--   Mod (C₁ <+> C₂) x
+-- | choice_right {C₁ C₂ x} (H: Mod C₂ x) :
+--   Mod (C₁ <+> C₂) x
+-- | star {C x} (H: Mod C x) :
+--   Mod (C**) x
+-- | assign {x e}:
+--   Mod [x ↣ e] x
+-- | non_det_assign {x}:
+--   Mod (stmt.non_det_assign x) x
 
 end IncLoLang

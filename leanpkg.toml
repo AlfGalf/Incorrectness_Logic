@@ -1,8 +1,8 @@
 [package]
 name = "incorrectness_logic"
 version = "0.1"
-lean_version = "leanprover-community/lean:3.30.0"
+lean_version = "leanprover-community/lean:3.49.1"
 path = "."
 
 [dependencies]
-mathlib = {git = "https://github.com/leanprover-community/mathlib", rev = "master"}
+mathlib = {git = "https://github.com/leanprover-community/mathlib", rev = "ba2245edf0c8bb155f1569fd9b9492a9b384cde6"}
