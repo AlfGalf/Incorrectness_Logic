@@ -355,12 +355,95 @@ begin
   },
 end
 
--- lemma constancy {P Q F: IncLoLang.state -> Prop} {C: IncLoLang.stmt} 
---   (H1: ∀ x, ¬IncLoLang.Mod(C)(x) || ¬IncLoLang.Free(F)(x)) (H2: [* P *]C[* Q *]):
---   [* λ st, P st ∧ F st *]C[* λ st, Q st ∧ F st *] :=
--- begin
---   sorry
--- end
+lemma helper {F: IncLoLang.state -> Prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType} {σ σ': IncLoLang.state}
+  (H1: ∀ x, x ∈ IncLoLang.Mod(C) → (IncLoLang.Free(F)(x))) (H2: IncLoLang.lang_semantics C ty σ σ'):
+  F σ → F σ' :=
+begin
+  -- by_contra hσ₂,
+  -- have h': σ ≠ σ', {
+  --   by_contra h2,
+  --   rw h2 at hσ,
+  --   exact hσ₂ hσ,
+  -- },
+
+  -- have hyp: (∃ x, σ x ≠ σ' x), {
+  --   exact function.ne_iff.mp h',
+  -- },
+  -- cases hyp with x,
+  -- induction H2,
+
+  induction C,
+  {
+    intro hσ,
+    have h : σ = σ', {
+      cases H2,
+      refl,
+    },
+    rw ← h,
+    exact hσ,
+  },
+  {
+    intro hσ,
+    specialize H1 C_ᾰ,
+    unfold IncLoLang.Mod at H1,
+    simp at H1,
+    unfold IncLoLang.Free at H1,
+    specialize H1 σ (C_ᾰ_1 σ),
+    have H1 := H1.1,
+    cases H2,
+    {
+      specialize H1 hσ,
+      exact H1,
+    },
+  },
+  {
+    intro hσ,
+    specialize H1 C,
+    unfold IncLoLang.Mod at H1,
+    simp at H1,
+    unfold IncLoLang.Free at H1,
+    specialize H1 σ,
+    cases H2,
+    {
+      have H1 := (H1 H2_v).1,
+      specialize H1 hσ,
+      exact H1,
+    },
+  },
+  {
+    rename C_ᾰ leftC,
+    rename C_ᾰ_1 rightC,
+    rename C_ih_ᾰ hLeft,
+    rename C_ih_ᾰ_1 hRight,
+
+
+
+  },
+  sorry,
+end
+
+lemma constancy {P Q F: IncLoLang.state -> Prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}
+  (H1: ∀ x, IncLoLang.Mod(C)(x) → (IncLoLang.Free(F)(x))) (H2: [* P *]C[* Q *]ty ):
+  [* λ st, P st ∧ F st *]C[* λ st, Q st ∧ F st *]ty :=
+begin
+  rintros σ ⟨ hσQ, hσF⟩,
+  specialize H2 σ hσQ,
+  rcases H2 with ⟨ σ', ⟨ hσ', hσ''⟩ ⟩ ,
+  use σ',
+  split,
+  {
+    simp,
+    split,
+    {
+      exact hσ',
+    },
+    {
+      
+      sorry,
+    },
+  },
+  {exact hσ'',},
+end
 
 /-! ### TODO: 
 

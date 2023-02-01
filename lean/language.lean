@@ -153,25 +153,19 @@ inductive lang_semantics: IncLoLang.stmt -> LogicType -> (IncLoLang.state) -> (I
 | star_recurse {C s₁ s₂ ty} (h: lang_semantics (C**;;C) ty s₁ s₂):
   lang_semantics (C**) ty s₁ s₂
 
-def free (P: state -> Prop) (x: string) : Prop := 
-  ∀ v, ∀ st, (P st) ↔ (P (st{x ↦ v}))
-
 def Free (C: state -> Prop) (x: string) : Prop :=
   ∀ σ: state, ∀ v, (C σ ↔ C (σ{x ↦ v}))
 
-def Mod (C: stmt) (x: string) : Prop :=
-  ∃ st st': state, lang_semantics C LogicType.ok st st' ∧ st x ≠ st' x
+def Mod: stmt -> set string
+| (C₁ ;; C₂) := (Mod C₁) ∪ (Mod C₂)
+| (C₁ <+> C₂) := (Mod C₁) ∪ (Mod C₂)
+| (C**) := (Mod C)
+| ([x ↣ v]) := {x}
+| (IncLoLang.stmt.skip) := {}
+| (IncLoLang.stmt.non_det_assign x) := {x}
+| (IncLoLang.stmt.assumes _) := {}
+| (IncLoLang.stmt.error) := {}
 
-lemma mod_assign {x: string} {v: ℕ} : 
-  Mod [x ↣ v] x :=
-begin
-  use (λ _, v+1),
-  use ((λ _, v+1) {x ↦ v}),
-
-  exact ⟨ lang_semantics.assign, by simp ⟩,
-end
-
--- inductive Mod: stmt → string → Prop
 -- | seq_left {C₁ C₂ x} (H: Mod C₁ x):
 --   Mod (C₁ ;; C₂) x
 -- | seq_right {C₁ C₂ x} (H: Mod C₂ x) :
