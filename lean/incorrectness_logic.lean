@@ -23,6 +23,7 @@ def post (ty: IncLoLang.LogicType) (r: IncLoLang.stmt) (p: IncLoLang.state -> Pr
 
 
 /-! ## Incorrectness logic and Hoare logic encodings -/
+
 def incorrectness_stmt (type: IncLoLang.LogicType) (P : (IncLoLang.state) → Prop) (R : IncLoLang.stmt)
   (Q : (IncLoLang.state) → Prop) : Prop := 
   ∀ state, Q state -> ((post type R) P) state
@@ -304,7 +305,6 @@ end
 
 /-! ## Variables and Mutation -/
 
-
 /- Assignment -/
 lemma assignment_correct {P x e} :
   [* P *](IncLoLang.stmt.assign x e)[* λ σ', (∃ x', (P{x ↣ x'} σ') ∧ σ' x = (e (σ'{x ↦ x'}))) *] IncLoLang.LogicType.ok :=
@@ -380,7 +380,9 @@ begin
   },
 end
 
-lemma helper_seq (F: IncLoLang.state -> Prop) (leftC rightC: IncLoLang.stmt) (σstart σend: IncLoLang.state)
+/- Costancy -/
+/- Consistency for the seq case -/
+lemma helper_consistency_seq (F: IncLoLang.state -> Prop) (leftC rightC: IncLoLang.stmt) (σstart σend: IncLoLang.state)
   (H1: ∀ x, x ∈ IncLoLang.Mod (leftC;;rightC) → (IncLoLang.Free(F)(x)))
   (hLeft: (∀ (x : string), x ∈ IncLoLang.Mod leftC → IncLoLang.Free F x) → ∀ (ty : IncLoLang.LogicType) (σ σ' : IncLoLang.state), IncLoLang.lang_semantics leftC ty σ σ' → (F σ ↔ F σ'))
   (hRight: (∀ (x : string), x ∈ IncLoLang.Mod rightC → IncLoLang.Free F x) → ∀ (ty : IncLoLang.LogicType) (σ σ' : IncLoLang.state), IncLoLang.lang_semantics rightC ty σ σ' → (F σ ↔ F σ')):
@@ -455,19 +457,12 @@ begin
     },
 end
 
--- | star_base {C s ty} :
---   lang_semantics (IncLoLang.stmt.star C) ty s s
--- | star_recurse {C s₁ s₂ ty} (h: lang_semantics (C** ;; C) ty s₁ s₂):
---   lang_semantics (C**) ty s₁ s₂
-
+/- Consistency for the star case -/
 lemma star_helper {F: IncLoLang.state -> Prop} {C: IncLoLang.stmt} :
   (∀ ty σ σ', IncLoLang.lang_semantics C ty σ σ' → (F σ ↔ F σ')) → (∀ ty σ σ', IncLoLang.lang_semantics (C**) ty σ σ' → (F σ ↔ F σ')) :=
 begin
-
   intros h ty σ σ',
-
   intro Hls,
-
   -- intro h',
   cases Hls,
 
@@ -527,7 +522,7 @@ begin
 end
 
 -- Want to show, if Mod(C) \ Free(F) = ∅ then constancy
-lemma helper {F: IncLoLang.state -> Prop} {C: IncLoLang.stmt} 
+lemma consistency_helper {F: IncLoLang.state -> Prop} {C: IncLoLang.stmt} 
   (H1: ∀ x, x ∈ IncLoLang.Mod(C) → (IncLoLang.Free(F)(x))):
   ∀ ty σ σ', IncLoLang.lang_semantics C ty σ σ' → (F σ ↔ F σ') :=
 begin
@@ -567,7 +562,7 @@ begin
     rename C_ih_ᾰ_1 hRight,
 
     intros ty σ σ',
-    exact helper_seq F leftC rightC σ σ' H1 hLeft hRight ty,
+    exact helper_consistency_seq F leftC rightC σ σ' H1 hLeft hRight ty,
   },
   case IncLoLang.stmt.error {
     intros ty σ σ' h,
@@ -626,7 +621,7 @@ begin
     split,
     { exact hσ', },
     {
-      exact (helper H1 ty σ σ' hσ'').2 hσF,
+      exact (consistency_helper H1 ty σ σ' hσ'').2 hσF,
     },
   },
   {exact hσ'',},

@@ -17,27 +17,6 @@ namespace IncLoLang
 
 meta def tactic.dec_trivial := `[exact dec_trivial]
 
--- def state : Type := string × ℕ -> Prop
-
--- def state.update : string -> ℕ -> state -> state
--- | name val s := (λ pair, pair == (name, val) ∨ s pair)
-
--- notation s `{` name ` ↦ ` val `}` := state.update name val s
-
--- @[simp] lemma update_apply (name : string) (val : ℕ) (s : state) :
---   s{name ↦ val} (name, val) :=
--- begin
---   unfold state.update,
---   finish,
--- end
-
--- @[simp] lemma repeat (name : string) (val : ℕ) (s : state) :
---   s{name ↦ val}{name ↦ val} = s{name ↦ val} :=
--- begin
---   unfold state.update,
---   finish,
--- end
-
 def state: Type := string -> ℕ
 
 def state.update : string -> ℕ -> state -> state
