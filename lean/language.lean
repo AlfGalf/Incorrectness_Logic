@@ -83,6 +83,7 @@ inductive stmt : Type
 | assumes         : (state → Prop) → stmt
 | choice          : stmt → stmt → stmt
 | star            : stmt → stmt
+| local_var       : string → stmt → stmt
 
 infixr ` ;; ` : 90 := stmt.seq
 
@@ -92,11 +93,14 @@ postfix `**` : 90 := stmt.star
 
 notation `[` x ` ↣ ` e `]` := stmt.assign x e
 
+notation `[loc` x `.` C `]` := stmt.local_var x C
+
 /- This is the definition of P[x'/x] used in the paper -/
 def p_thing (P: IncLoLang.state -> Prop) (x': ℕ) (x: string) : IncLoLang.state -> Prop :=
   -- λ σ', ∃ σ, P σ ∧ σ' = σ{x ↦ x'}
   -- This is the definition given int he paper but it is wrong
-  λ σ', ∃ σ, P σ ∧ σ = σ'{x ↦ x'}
+  λ σ', P (σ'{x ↦ x'})
+-- ie, True for σ if P(σ{x ↦ x'})
 
 notation P `{` name ` ↣ ` val `}` := p_thing P val name
 
@@ -113,10 +117,8 @@ def repeat: IncLoLang.stmt → ℕ → IncLoLang.stmt
 inductive lang_semantics: IncLoLang.stmt -> LogicType -> (IncLoLang.state) -> (IncLoLang.state) -> Prop
 | skip {s} :
   lang_semantics IncLoLang.stmt.skip LogicType.ok s s
-| seq_ok {S T s t u} (H1: lang_semantics S LogicType.ok s t) (H2: lang_semantics T LogicType.ok t u) :
-  lang_semantics(S ;; T) LogicType.ok s u
-| seq_er_2 {S T s t u} (H1: lang_semantics S LogicType.ok s t) (H2: lang_semantics T LogicType.er t u) : 
-  lang_semantics (S ;; T) LogicType.er s u
+| seq_ty {S T s t u ty} (H1: lang_semantics S LogicType.ok s t) (H2: lang_semantics T ty t u) :
+  lang_semantics(S ;; T) ty s u
 | seq_er_1 {S T s t} (H1: lang_semantics S LogicType.er s t): 
   lang_semantics (S ;; T) LogicType.er s t
 | error {s}:
@@ -133,13 +135,11 @@ inductive lang_semantics: IncLoLang.stmt -> LogicType -> (IncLoLang.state) -> (I
   lang_semantics (C₁ <+> C₂) ty s₁ s₂
 | star {C s₁ s₂ ty} (i: ℕ) (h: lang_semantics (repeat C i) ty s₁ s₂):
   lang_semantics (C**) ty s₁ s₂
--- | star_base {C s ty} :
---   lang_semantics (C**) ty s s
--- | star_recurse {C s₁ s₂ ty} (h: lang_semantics (C** ;; C) ty s₁ s₂):
---   lang_semantics (C**) ty s₁ s₂
+| local_var {C s₁ s₂ ty x v} (h: lang_semantics C ty s₁ s₂):
+  lang_semantics ([loc x . C]) ty (s₁{x ↦ v}) (s₂{x ↦ v})
 
-def Free (C: state -> Prop) (x: string) : Prop :=
-  ∀ σ: state, ∀ v, (C σ ↔ C (σ{x ↦ v}))
+def Free (P: state -> Prop): set string :=
+  λ x, ∀ σ v, (P σ ↔ P (σ{x ↦ v}))
 
 def Mod: stmt -> set string
 | (C₁ ;; C₂) := (Mod C₁) ∪ (Mod C₂)
@@ -150,6 +150,7 @@ def Mod: stmt -> set string
 | (IncLoLang.stmt.non_det_assign x) := {x}
 | (IncLoLang.stmt.assumes _) := {}
 | (IncLoLang.stmt.error) := {}
+| (IncLoLang.stmt.local_var x C) := Mod C \ {x}
 
 lemma mod_elem_left_elem_seq (C₁ C₂: stmt) (x: string):
    x ∈ Mod C₁ → x ∈ Mod (C₁ ;; C₂):=
@@ -187,6 +188,53 @@ lemma mod_star_eq (C: stmt):
    Mod (C**) = Mod C :=
 begin 
   rw Mod,
+end
+
+lemma start_seq {C: stmt} {σ σ': state} {ty: LogicType}:
+  IncLoLang.lang_semantics (C** ;; C) ty σ σ' → IncLoLang.lang_semantics (C**) ty σ σ' :=
+begin
+  intro h,
+  cases h,
+  {
+    have H: ∃ N, lang_semantics (repeat C N) ty σ σ',
+    {
+      cases h_H1,
+      use h_H1_i.succ,
+      rw repeat,
+      exact lang_semantics.seq_ty h_H1_h h_H2,
+    },
+    cases H with N,
+    exact lang_semantics.star N H_h,
+  },
+  {
+    exact h_H1,
+  },
+end
+
+lemma p_thing_free {x v} {P: state -> Prop} :
+  Free (P{ x ↣ v }) = (Free P) ∪ { x } :=
+begin
+  apply set.eq_of_subset_of_subset,
+  {
+    intro y,
+    unfold Free,
+    sorry,
+  },
+  {
+    intros y hx,
+    cases hx,
+    {
+      unfold Free,
+      unfold Free at hx,
+      intros σ v,
+
+    },
+    {
+
+    }
+
+  }
+
 end
 
 end IncLoLang

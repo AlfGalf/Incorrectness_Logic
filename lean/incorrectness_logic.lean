@@ -184,8 +184,7 @@ begin
   { exact hStartP, },
   {
     cases ty,
-    { exact IncLoLang.lang_semantics.seq_er_2 t r },
-    { exact IncLoLang.lang_semantics.seq_ok t r },
+    repeat { exact IncLoLang.lang_semantics.seq_ty t r },
   },
 end
 
@@ -220,17 +219,9 @@ begin
     cases h, 
     {
       cases h_H1,
-      have H: IncLoLang.lang_semantics (IncLoLang.repeat C (nat.succ h_H1_i)) IncLoLang.LogicType.ok bState state, {
+      have H: IncLoLang.lang_semantics (IncLoLang.repeat C (nat.succ h_H1_i)) ty bState state, {
         rw IncLoLang.repeat,
-        exact IncLoLang.lang_semantics.seq_ok (h_H1_h) (h_H2)
-      },
-      exact IncLoLang.lang_semantics.star (nat.succ h_H1_i) H,
-    },
-    {
-      cases h_H1,
-      have H: IncLoLang.lang_semantics (IncLoLang.repeat C (nat.succ h_H1_i)) IncLoLang.LogicType.er bState state, {
-        rw IncLoLang.repeat,
-        exact IncLoLang.lang_semantics.seq_er_2 (h_H1_h) (h_H2)
+        exact IncLoLang.lang_semantics.seq_ty (h_H1_h) (h_H2)
       },
       exact IncLoLang.lang_semantics.star (nat.succ h_H1_i) H,
     },
@@ -414,34 +405,15 @@ begin
         have hMID: F σmid, {
           exact (hLeft freeLeft IncLoLang.LogicType.ok σstart σmid hσ_H1).1 hσstart,
         },
-        exact (hRight freeRight IncLoLang.LogicType.ok σmid σend hσ_H2).1 hMID,
+        exact (hRight freeRight ty σmid σend hσ_H2).1 hMID,
       },
       {
         intro hσend,
         have hMID: F σmid, {
-          exact (hRight freeRight IncLoLang.LogicType.ok σmid σend hσ_H2).2 hσend,
+          exact (hRight freeRight ty σmid σend hσ_H2).2 hσend,
         },
         exact (hLeft freeLeft IncLoLang.LogicType.ok σstart σmid hσ_H1).2 hMID,
       },
-    },
-    {
-      -- Seq error case 2
-      rename hσ_t σmid,
-      split,
-      {
-        intro hσstart,
-        have hMID: F σmid, {
-          exact (hLeft freeLeft IncLoLang.LogicType.ok σstart σmid hσ_H1).1 hσstart,
-        },
-        exact (hRight freeRight IncLoLang.LogicType.er σmid σend hσ_H2).1 hMID,
-      },
-      {
-        intro hσend,
-        have hMID: F σmid, {
-          exact (hRight freeRight IncLoLang.LogicType.er σmid σend hσ_H2).2 hσend,
-        },
-        exact (hLeft freeLeft IncLoLang.LogicType.ok σstart σmid hσ_H1).2 hMID,
-      }
     },
     {
       -- Seq error case 2
@@ -490,11 +462,7 @@ begin
         cases h',
         {
           have hmid := (i_ih IncLoLang.LogicType.ok startState h'_t h'_H1).1 hStart,
-          exact (h IncLoLang.LogicType.ok h'_t endState h'_H2).1 hmid,
-        },
-        {
-          have hmid := (i_ih IncLoLang.LogicType.ok startState h'_t h'_H1).1 hStart,
-          exact (h IncLoLang.LogicType.er h'_t endState h'_H2).1 hmid,
+          exact (h ty h'_t endState h'_H2).1 hmid,
         },
         {
           exact (i_ih IncLoLang.LogicType.er startState endState h'_H1).1 hStart,
@@ -504,11 +472,7 @@ begin
         intro hEnd,
         cases h',
         {
-          have hmid := (h IncLoLang.LogicType.ok h'_t endState h'_H2).2 hEnd,
-          exact (i_ih IncLoLang.LogicType.ok startState h'_t h'_H1).2 hmid,
-        },
-        {
-          have hmid := (h IncLoLang.LogicType.er h'_t endState h'_H2).2 hEnd,
+          have hmid := (h ty h'_t endState h'_H2).2 hEnd,
           exact (i_ih IncLoLang.LogicType.ok startState h'_t h'_H1).2 hmid,
         },
         {
@@ -522,11 +486,12 @@ begin
 end
 
 -- Want to show, if Mod(C) \ Free(F) = ∅ then constancy
-lemma consistency_helper {F: IncLoLang.state -> Prop} {C: IncLoLang.stmt} 
+lemma consistency_helper {C: IncLoLang.stmt} 
+  (F: IncLoLang.state -> Prop) 
   (H1: ∀ x, x ∈ IncLoLang.Mod(C) → (IncLoLang.Free(F)(x))):
   ∀ ty σ σ', IncLoLang.lang_semantics C ty σ σ' → (F σ ↔ F σ') :=
 begin
-  induction C,
+  induction C generalizing F,
   case IncLoLang.stmt.skip {
     intros ty σ σ' H2,
     cases H2,
@@ -562,7 +527,7 @@ begin
     rename C_ih_ᾰ_1 hRight,
 
     intros ty σ σ',
-    exact helper_consistency_seq F leftC rightC σ σ' H1 hLeft hRight ty,
+    exact helper_consistency_seq F leftC rightC σ σ' H1 (hLeft F) (hRight F) ty,
   },
   case IncLoLang.stmt.error {
     intros ty σ σ' h,
@@ -590,10 +555,10 @@ begin
     },
 
     cases h,
-    { exact hLeft freeLeft σ σ' ty h_h, },
-    { exact hRight freeRight σ σ' ty h_h, },
+    { exact hLeft F freeLeft σ σ' ty h_h, },
+    { exact hRight F freeRight σ σ' ty h_h, },
   },
-  {
+  case IncLoLang.stmt.star {
     -- Star case
     rename C_ᾰ C,
     intro ty,
@@ -601,9 +566,24 @@ begin
     intro h,
 
     rw IncLoLang.Mod at H1,
-    specialize C_ih H1,
+    specialize C_ih F H1,
 
     exact (star_helper C_ih) ty startst endst h,
+  },
+  case IncLoLang.stmt.local_var {
+    rename C_ᾰ x,
+    rename C_ᾰ_1 C,
+
+    /- 
+      ∀ (y : string), y ∈ IncLoLang.Mod [loc x . C] → IncLoLang.Free F y
+      If y is modified by [loc x . C] then F is free on y (ie. if C modifies y (and y != x??) they F free on y)
+
+      IncLoLang.lang_semantics [locx.C] ty σ σ' → (F σ ↔ F σ')
+    -/
+
+    intros ty σ σ' hlC,
+
+    cases hlC,
   },
 end
 
@@ -627,6 +607,42 @@ begin
   {exact hσ'',},
 end
 
+lemma star_seq {P Q: IncLoLang.state -> Prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}:
+  ([* P *]C** ;; C[* Q *]ty) → ([* P *]C**[* Q *]ty) :=
+begin
+  intros h σend hQσend,
+  specialize h σend hQσend,
+  rcases h with ⟨ σstart, ⟨ hσstart, hlang ⟩ ⟩ ,
+  use σstart,
+  split,
+  { exact hσstart, },
+  { exact IncLoLang.start_seq hlang, },
+end
+
+/- Backwards variant -/
+lemma backwards_variant {P: ℕ → IncLoLang.state -> Prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}
+  (H1: ∀ n, [* P n *]C[* P n.succ *]IncLoLang.LogicType.ok ):
+  ∀ n, [* P 0 *]C**[* P n *]IncLoLang.LogicType.ok :=
+begin
+  intros n,
+  induction n,
+  {
+    intros σ hσ,
+    unfold post,
+    use σ,
+    split,
+    {exact hσ,},
+    {
+      exact IncLoLang.lang_semantics.star 0 (by { rw IncLoLang.repeat, exact IncLoLang.lang_semantics.skip, }),
+    },
+  },
+  {
+    specialize H1 n_n,
+    have H := seq_normal_incorrect n_ih H1,
+    exact star_seq H,
+  }
+end
+
 /-! ### TODO: 
 
 - [x] Assignment
@@ -635,6 +651,6 @@ end
 - [ ] Local variable !!
 - [ ] Substitution 1
 - [ ] Substitution 2
-- [ ] Backwards varient
+- [x] Backwards varient
 
 -/
