@@ -196,7 +196,13 @@ begin
   use state,
   split,
   { exact hState, },
-  { exact IncLoLang.lang_semantics.star_base, },
+  { 
+    have h : IncLoLang.lang_semantics (IncLoLang.repeat C 0) IncLoLang.LogicType.ok state state, {
+      rw IncLoLang.repeat,
+      exact IncLoLang.lang_semantics.skip,
+    },
+    exact IncLoLang.lang_semantics.star 0 h, 
+  },
 end
 
 /- Iterate non-zero -/
@@ -209,7 +215,26 @@ begin
   use bState,
   split,
   { exact hBState, },
-  { exact IncLoLang.lang_semantics.star_recurse h, }
+  { 
+    cases h, 
+    {
+      cases h_H1,
+      have H: IncLoLang.lang_semantics (IncLoLang.repeat C (nat.succ h_H1_i)) IncLoLang.LogicType.ok bState state, {
+        rw IncLoLang.repeat,
+        exact IncLoLang.lang_semantics.seq_ok (h_H1_h) (h_H2)
+      },
+      exact IncLoLang.lang_semantics.star (nat.succ h_H1_i) H,
+    },
+    {
+      cases h_H1,
+      have H: IncLoLang.lang_semantics (IncLoLang.repeat C (nat.succ h_H1_i)) IncLoLang.LogicType.er bState state, {
+        rw IncLoLang.repeat,
+        exact IncLoLang.lang_semantics.seq_er_2 (h_H1_h) (h_H2)
+      },
+      exact IncLoLang.lang_semantics.star (nat.succ h_H1_i) H,
+    },
+    { exact h_H1, },
+  }
 end
 
 /- Choice left -/
@@ -355,91 +380,253 @@ begin
   },
 end
 
-lemma helper {F: IncLoLang.state -> Prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType} {σ σ': IncLoLang.state}
-  (H1: ∀ x, x ∈ IncLoLang.Mod(C) → (IncLoLang.Free(F)(x))) (H2: IncLoLang.lang_semantics C ty σ σ'):
-  F σ → F σ' :=
+lemma helper_seq (F: IncLoLang.state -> Prop) (leftC rightC: IncLoLang.stmt) (σstart σend: IncLoLang.state)
+  (H1: ∀ x, x ∈ IncLoLang.Mod (leftC;;rightC) → (IncLoLang.Free(F)(x)))
+  (hLeft: (∀ (x : string), x ∈ IncLoLang.Mod leftC → IncLoLang.Free F x) → ∀ (ty : IncLoLang.LogicType) (σ σ' : IncLoLang.state), IncLoLang.lang_semantics leftC ty σ σ' → (F σ ↔ F σ'))
+  (hRight: (∀ (x : string), x ∈ IncLoLang.Mod rightC → IncLoLang.Free F x) → ∀ (ty : IncLoLang.LogicType) (σ σ' : IncLoLang.state), IncLoLang.lang_semantics rightC ty σ σ' → (F σ ↔ F σ')):
+  ∀ ty, IncLoLang.lang_semantics (leftC ;; rightC) ty σstart σend → (F σstart ↔ F σend) :=
 begin
-  -- by_contra hσ₂,
-  -- have h': σ ≠ σ', {
-  --   by_contra h2,
-  --   rw h2 at hσ,
-  --   exact hσ₂ hσ,
-  -- },
-
-  -- have hyp: (∃ x, σ x ≠ σ' x), {
-  --   exact function.ne_iff.mp h',
-  -- },
-  -- cases hyp with x,
-  -- induction H2,
-
-  induction C,
-  {
+    intro ty,
     intro hσ,
-    have h : σ = σ', {
-      cases H2,
-      refl,
+    have freeLeft: (∀ (x : string), x ∈ IncLoLang.Mod leftC → IncLoLang.Free F x), {
+      intro x,
+      intro hx,
+      have hMod := IncLoLang.mod_elem_left_elem_seq leftC rightC x hx,
+      specialize H1 x hMod,
+      exact H1,
     },
-    rw ← h,
-    exact hσ,
-  },
+    have freeRight: (∀ (x : string), x ∈ IncLoLang.Mod rightC → IncLoLang.Free F x), {
+      intro x,
+      intro hx,
+      have hMod := IncLoLang.mod_elem_right_elem_seq leftC rightC x hx,
+      specialize H1 x hMod,
+      exact H1,
+    },
+    cases hσ,
+    {
+      -- Seq okay case
+      rename hσ_t σmid,
+      split,
+      {
+        intro hσstart,
+        have hMID: F σmid, {
+          exact (hLeft freeLeft IncLoLang.LogicType.ok σstart σmid hσ_H1).1 hσstart,
+        },
+        exact (hRight freeRight IncLoLang.LogicType.ok σmid σend hσ_H2).1 hMID,
+      },
+      {
+        intro hσend,
+        have hMID: F σmid, {
+          exact (hRight freeRight IncLoLang.LogicType.ok σmid σend hσ_H2).2 hσend,
+        },
+        exact (hLeft freeLeft IncLoLang.LogicType.ok σstart σmid hσ_H1).2 hMID,
+      },
+    },
+    {
+      -- Seq error case 2
+      rename hσ_t σmid,
+      split,
+      {
+        intro hσstart,
+        have hMID: F σmid, {
+          exact (hLeft freeLeft IncLoLang.LogicType.ok σstart σmid hσ_H1).1 hσstart,
+        },
+        exact (hRight freeRight IncLoLang.LogicType.er σmid σend hσ_H2).1 hMID,
+      },
+      {
+        intro hσend,
+        have hMID: F σmid, {
+          exact (hRight freeRight IncLoLang.LogicType.er σmid σend hσ_H2).2 hσend,
+        },
+        exact (hLeft freeLeft IncLoLang.LogicType.ok σstart σmid hσ_H1).2 hMID,
+      }
+    },
+    {
+      -- Seq error case 2
+      split,
+      {
+        intro hσstart,
+        exact (hLeft freeLeft IncLoLang.LogicType.er σstart σend hσ_H1).1 hσstart,
+      },
+      {
+        intro hσend,
+        exact (hLeft freeLeft IncLoLang.LogicType.er σstart σend hσ_H1).2 hσend,
+      },
+    },
+end
+
+-- | star_base {C s ty} :
+--   lang_semantics (IncLoLang.stmt.star C) ty s s
+-- | star_recurse {C s₁ s₂ ty} (h: lang_semantics (C** ;; C) ty s₁ s₂):
+--   lang_semantics (C**) ty s₁ s₂
+
+lemma star_helper {F: IncLoLang.state -> Prop} {C: IncLoLang.stmt} :
+  (∀ ty σ σ', IncLoLang.lang_semantics C ty σ σ' → (F σ ↔ F σ')) → (∀ ty σ σ', IncLoLang.lang_semantics (C**) ty σ σ' → (F σ ↔ F σ')) :=
+begin
+
+  intros h ty σ σ',
+
+  intro Hls,
+
+  -- intro h',
+  cases Hls,
+
+  have H: ∀ i ty σ σ', IncLoLang.lang_semantics (IncLoLang.repeat C i) ty σ σ' → (F σ ↔ F σ'),
   {
-    intro hσ,
+    intro i,
+    induction i,
+    {
+      intros σ σ' ty h,
+      split,
+      repeat {
+        intro hσ,
+        rw IncLoLang.repeat at h,
+        cases h,
+        exact hσ,
+      },
+    },
+    {
+      rw IncLoLang.repeat,
+      intros ty startState endState,
+      intros h',
+      split,
+      { 
+        intro hStart,
+        cases h',
+        {
+          have hmid := (i_ih IncLoLang.LogicType.ok startState h'_t h'_H1).1 hStart,
+          exact (h IncLoLang.LogicType.ok h'_t endState h'_H2).1 hmid,
+        },
+        {
+          have hmid := (i_ih IncLoLang.LogicType.ok startState h'_t h'_H1).1 hStart,
+          exact (h IncLoLang.LogicType.er h'_t endState h'_H2).1 hmid,
+        },
+        {
+          exact (i_ih IncLoLang.LogicType.er startState endState h'_H1).1 hStart,
+        },
+      },
+      { 
+        intro hEnd,
+        cases h',
+        {
+          have hmid := (h IncLoLang.LogicType.ok h'_t endState h'_H2).2 hEnd,
+          exact (i_ih IncLoLang.LogicType.ok startState h'_t h'_H1).2 hmid,
+        },
+        {
+          have hmid := (h IncLoLang.LogicType.er h'_t endState h'_H2).2 hEnd,
+          exact (i_ih IncLoLang.LogicType.ok startState h'_t h'_H1).2 hmid,
+        },
+        {
+          exact (i_ih IncLoLang.LogicType.er startState endState h'_H1).2 hEnd,
+        },
+      },
+    },
+  },
+
+  exact H Hls_i ty σ σ' Hls_h,
+end
+
+-- Want to show, if Mod(C) \ Free(F) = ∅ then constancy
+lemma helper {F: IncLoLang.state -> Prop} {C: IncLoLang.stmt} 
+  (H1: ∀ x, x ∈ IncLoLang.Mod(C) → (IncLoLang.Free(F)(x))):
+  ∀ ty σ σ', IncLoLang.lang_semantics C ty σ σ' → (F σ ↔ F σ') :=
+begin
+  induction C,
+  case IncLoLang.stmt.skip {
+    intros ty σ σ' H2,
+    cases H2,
+    exact iff.rfl,
+  },
+  case IncLoLang.stmt.assign {
+    intros ty σ σ' H2,
+    --  hσ,
     specialize H1 C_ᾰ,
     unfold IncLoLang.Mod at H1,
     simp at H1,
     unfold IncLoLang.Free at H1,
     specialize H1 σ (C_ᾰ_1 σ),
-    have H1 := H1.1,
+
     cases H2,
-    {
-      specialize H1 hσ,
-      exact H1,
-    },
+    exact H1,
   },
-  {
-    intro hσ,
+  case IncLoLang.stmt.non_det_assign {
+    intros ty σ σ' H2,
     specialize H1 C,
     unfold IncLoLang.Mod at H1,
     simp at H1,
     unfold IncLoLang.Free at H1,
     specialize H1 σ,
     cases H2,
-    {
-      have H1 := (H1 H2_v).1,
-      specialize H1 hσ,
-      exact H1,
-    },
+    specialize H1 H2_v,
+    exact H1,
   },
-  {
+  case IncLoLang.stmt.seq {
     rename C_ᾰ leftC,
     rename C_ᾰ_1 rightC,
     rename C_ih_ᾰ hLeft,
     rename C_ih_ᾰ_1 hRight,
 
-
-
+    intros ty σ σ',
+    exact helper_seq F leftC rightC σ σ' H1 hLeft hRight ty,
   },
-  sorry,
+  case IncLoLang.stmt.error {
+    intros ty σ σ' h,
+    cases h,
+    exact iff.rfl,
+  },
+  case IncLoLang.stmt.assumes {
+    intros σ σ' ty h,
+    cases h,
+    exact iff.rfl,
+  },
+  case IncLoLang.stmt.choice {
+    rename C_ᾰ leftC,
+    rename C_ᾰ_1 rightC,
+    rename C_ih_ᾰ hLeft,
+    rename C_ih_ᾰ_1 hRight,
+    intros σ σ' ty h,
+    have freeLeft: (∀ (x : string), x ∈ IncLoLang.Mod leftC → IncLoLang.Free F x), {
+      intros x hx,
+      exact H1 x (IncLoLang.mod_elem_left_elem_choice leftC rightC x hx),
+    },
+    have freeRight: (∀ (x : string), x ∈ IncLoLang.Mod rightC → IncLoLang.Free F x), {
+      intros x hx,
+      exact H1 x (IncLoLang.mod_elem_right_elem_choice leftC rightC x hx),
+    },
+
+    cases h,
+    { exact hLeft freeLeft σ σ' ty h_h, },
+    { exact hRight freeRight σ σ' ty h_h, },
+  },
+  {
+    -- Star case
+    rename C_ᾰ C,
+    intro ty,
+    intros startst endst,
+    intro h,
+
+    rw IncLoLang.Mod at H1,
+    specialize C_ih H1,
+
+    exact (star_helper C_ih) ty startst endst h,
+  },
 end
 
 lemma constancy {P Q F: IncLoLang.state -> Prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}
   (H1: ∀ x, IncLoLang.Mod(C)(x) → (IncLoLang.Free(F)(x))) (H2: [* P *]C[* Q *]ty ):
   [* λ st, P st ∧ F st *]C[* λ st, Q st ∧ F st *]ty :=
 begin
-  rintros σ ⟨ hσQ, hσF⟩,
-  specialize H2 σ hσQ,
-  rcases H2 with ⟨ σ', ⟨ hσ', hσ''⟩ ⟩ ,
-  use σ',
+  rintros σ' ⟨ hσQ, hσF⟩,
+  specialize H2 σ' hσQ,
+  rcases H2 with ⟨ σ, ⟨ hσ', hσ''⟩ ⟩ ,
+  use σ,
   split,
   {
     simp,
     split,
+    { exact hσ', },
     {
-      exact hσ',
-    },
-    {
-      
-      sorry,
+      exact (helper H1 ty σ σ' hσ'').2 hσF,
     },
   },
   {exact hσ'',},
@@ -449,7 +636,7 @@ end
 
 - [x] Assignment
 - [x] Nondet Assignment
-- [ ] Constancy
+- [x] Constancy
 - [ ] Local variable !!
 - [ ] Substitution 1
 - [ ] Substitution 2

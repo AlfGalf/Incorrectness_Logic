@@ -127,6 +127,10 @@ inductive LogicType : Type
 | er
 | ok
 
+def repeat: IncLoLang.stmt → ℕ → IncLoLang.stmt 
+| C nat.zero := IncLoLang.stmt.skip
+| C (nat.succ i) := (repeat C (i)) ;; C
+
 inductive lang_semantics: IncLoLang.stmt -> LogicType -> (IncLoLang.state) -> (IncLoLang.state) -> Prop
 | skip {s} :
   lang_semantics IncLoLang.stmt.skip LogicType.ok s s
@@ -145,13 +149,15 @@ inductive lang_semantics: IncLoLang.stmt -> LogicType -> (IncLoLang.state) -> (I
 | assumes_ok {s} {B: IncLoLang.state -> Prop} (h: B s) :
   lang_semantics (IncLoLang.stmt.assumes B) LogicType.ok s s
 | choice_left {C₁ C₂ ty s₁ s₂} (h: (lang_semantics C₁ ty s₁ s₂)): 
-  lang_semantics (IncLoLang.stmt.choice C₁ C₂) ty s₁ s₂
+  lang_semantics (C₁ <+> C₂) ty s₁ s₂
 | choice_right {C₁ C₂ ty s₁ s₂} (h: (lang_semantics C₂ ty s₁ s₂)): 
-  lang_semantics (IncLoLang.stmt.choice C₁ C₂) ty s₁ s₂
-| star_base {C s ty} :
-  lang_semantics (IncLoLang.stmt.star C) ty s s
-| star_recurse {C s₁ s₂ ty} (h: lang_semantics (C**;;C) ty s₁ s₂):
+  lang_semantics (C₁ <+> C₂) ty s₁ s₂
+| star {C s₁ s₂ ty} (i: ℕ) (h: lang_semantics (repeat C i) ty s₁ s₂):
   lang_semantics (C**) ty s₁ s₂
+-- | star_base {C s ty} :
+--   lang_semantics (C**) ty s s
+-- | star_recurse {C s₁ s₂ ty} (h: lang_semantics (C** ;; C) ty s₁ s₂):
+--   lang_semantics (C**) ty s₁ s₂
 
 def Free (C: state -> Prop) (x: string) : Prop :=
   ∀ σ: state, ∀ v, (C σ ↔ C (σ{x ↦ v}))
@@ -166,19 +172,42 @@ def Mod: stmt -> set string
 | (IncLoLang.stmt.assumes _) := {}
 | (IncLoLang.stmt.error) := {}
 
--- | seq_left {C₁ C₂ x} (H: Mod C₁ x):
---   Mod (C₁ ;; C₂) x
--- | seq_right {C₁ C₂ x} (H: Mod C₂ x) :
---   Mod (C₁ ;; C₂) x
--- | choice_left {C₁ C₂ x} (H: Mod C₁ x) :
---   Mod (C₁ <+> C₂) x
--- | choice_right {C₁ C₂ x} (H: Mod C₂ x) :
---   Mod (C₁ <+> C₂) x
--- | star {C x} (H: Mod C x) :
---   Mod (C**) x
--- | assign {x e}:
---   Mod [x ↣ e] x
--- | non_det_assign {x}:
---   Mod (stmt.non_det_assign x) x
+lemma mod_elem_left_elem_seq (C₁ C₂: stmt) (x: string):
+   x ∈ Mod C₁ → x ∈ Mod (C₁ ;; C₂):=
+begin 
+  intro h,
+  rw Mod,
+  finish,
+end
+
+lemma mod_elem_right_elem_seq (C₁ C₂: stmt) (x: string):
+   x ∈ Mod C₂ → x ∈ Mod (C₁ ;; C₂):=
+begin 
+  intro h,
+  rw Mod,
+  finish,
+end
+
+lemma mod_elem_left_elem_choice (C₁ C₂: stmt) (x: string):
+   x ∈ Mod C₁ → x ∈ Mod (C₁ <+> C₂):=
+begin 
+  intro h,
+  rw Mod,
+  finish,
+end
+
+lemma mod_elem_right_elem_choice (C₁ C₂: stmt) (x: string):
+   x ∈ Mod C₂ → x ∈ Mod (C₁ <+> C₂):=
+begin 
+  intro h,
+  rw Mod,
+  finish,
+end
+
+lemma mod_star_eq (C: stmt):
+   Mod (C**) = Mod C :=
+begin 
+  rw Mod,
+end
 
 end IncLoLang
