@@ -592,7 +592,14 @@ begin
     specialize C_ih (F{ x ↣ hlC_v}),
     rw IncLoLang.Mod at H1,
 
-    -- cases hlC,
+    have H: (IncLoLang.Mod C) ⊆ IncLoLang.Free (F{x ↣ hlC_v}), {
+      calc IncLoLang.Mod C ⊆ (IncLoLang.Mod C \ {x}) ∪ {x} : (IncLoLang.Mod C).subset_diff_union ({x})
+      ... ⊆ (IncLoLang.Free F) ∪ {x} : set.union_subset_union_left ({x}) H1
+      ... ⊆ IncLoLang.Free (F{x ↣ hlC_v}): IncLoLang.p_thing_free,
+    },
+    specialize C_ih H ty hlC_s₁ hlC_s₂ hlC_h,
+    unfold IncLoLang.p_thing at C_ih,
+    exact C_ih,
   },
 end
 
