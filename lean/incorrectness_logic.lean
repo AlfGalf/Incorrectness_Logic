@@ -379,21 +379,21 @@ end
 /- Costancy -/
 /- Consistency for the seq case -/
 lemma helper_consistency_seq (F: IncLoLang.state -> Prop) (leftC rightC: IncLoLang.stmt) (σstart σend: IncLoLang.state)
-  (H1: ∀ x, x ∈ IncLoLang.Mod (leftC;;rightC) → (IncLoLang.Free(F)(x)))
-  (hLeft: (∀ (x : string), x ∈ IncLoLang.Mod leftC → IncLoLang.Free F x) → ∀ (ty : IncLoLang.LogicType) (σ σ' : IncLoLang.state), IncLoLang.lang_semantics leftC ty σ σ' → (F σ ↔ F σ'))
-  (hRight: (∀ (x : string), x ∈ IncLoLang.Mod rightC → IncLoLang.Free F x) → ∀ (ty : IncLoLang.LogicType) (σ σ' : IncLoLang.state), IncLoLang.lang_semantics rightC ty σ σ' → (F σ ↔ F σ')):
+  (H1: ∀ x, x ∈ IncLoLang.Mod (leftC;;rightC) → (IncLoLang.prop.Free(F)(x)))
+  (hLeft: (∀ (x : string), x ∈ IncLoLang.Mod leftC → IncLoLang.prop.Free F x) → ∀ (ty : IncLoLang.LogicType) (σ σ' : IncLoLang.state), IncLoLang.lang_semantics leftC ty σ σ' → (F σ ↔ F σ'))
+  (hRight: (∀ (x : string), x ∈ IncLoLang.Mod rightC → IncLoLang.prop.Free F x) → ∀ (ty : IncLoLang.LogicType) (σ σ' : IncLoLang.state), IncLoLang.lang_semantics rightC ty σ σ' → (F σ ↔ F σ')):
   ∀ ty, IncLoLang.lang_semantics (leftC ;; rightC) ty σstart σend → (F σstart ↔ F σend) :=
 begin
     intro ty,
     intro hσ,
-    have freeLeft: (∀ (x : string), x ∈ IncLoLang.Mod leftC → IncLoLang.Free F x), {
+    have freeLeft: (∀ (x : string), x ∈ IncLoLang.Mod leftC → IncLoLang.prop.Free F x), {
       intro x,
       intro hx,
       have hMod := IncLoLang.mod_elem_left_elem_seq leftC rightC x hx,
       specialize H1 x hMod,
       exact H1,
     },
-    have freeRight: (∀ (x : string), x ∈ IncLoLang.Mod rightC → IncLoLang.Free F x), {
+    have freeRight: (∀ (x : string), x ∈ IncLoLang.Mod rightC → IncLoLang.prop.Free F x), {
       intro x,
       intro hx,
       have hMod := IncLoLang.mod_elem_right_elem_seq leftC rightC x hx,
@@ -493,7 +493,7 @@ end
 -- Want to show, if Mod(C) \ Free(F) = ∅ then constancy
 lemma consistency_helper {C: IncLoLang.stmt} 
   (F: IncLoLang.state -> Prop) 
-  (H1: IncLoLang.Mod C ⊆  IncLoLang.Free F):
+  (H1: IncLoLang.Mod C ⊆  IncLoLang.prop.Free F):
   ∀ ty σ σ', IncLoLang.lang_semantics C ty σ σ' → (F σ ↔ F σ') :=
 begin
   induction C generalizing F,
@@ -508,7 +508,7 @@ begin
     -- specialize H1 C_ᾰ,
     unfold IncLoLang.Mod at H1,
     simp at H1,
-    unfold IncLoLang.Free at H1,
+    unfold IncLoLang.prop.Free at H1,
     specialize H1 σ (C_ᾰ_1 σ),
 
     cases H2,
@@ -519,7 +519,7 @@ begin
     -- specialize H1 C,
     unfold IncLoLang.Mod at H1,
     simp at H1,
-    unfold IncLoLang.Free at H1,
+    unfold IncLoLang.prop.Free at H1,
     specialize H1 σ,
     cases H2,
     specialize H1 H2_v,
@@ -550,11 +550,11 @@ begin
     rename C_ih_ᾰ hLeft,
     rename C_ih_ᾰ_1 hRight,
     intros σ σ' ty h,
-    have freeLeft: (∀ (x : string), x ∈ IncLoLang.Mod leftC → IncLoLang.Free F x), {
+    have freeLeft: (∀ (x : string), x ∈ IncLoLang.Mod leftC → IncLoLang.prop.Free F x), {
       intros x hx,
       exact H1 (IncLoLang.mod_elem_left_elem_choice leftC rightC x hx),
     },
-    have freeRight: (∀ (x : string), x ∈ IncLoLang.Mod rightC → IncLoLang.Free F x), {
+    have freeRight: (∀ (x : string), x ∈ IncLoLang.Mod rightC → IncLoLang.prop.Free F x), {
       intros x hx,
       exact H1 (IncLoLang.mod_elem_right_elem_choice leftC rightC x hx),
     },
@@ -592,10 +592,10 @@ begin
     specialize C_ih (F{ x ↣ hlC_v}),
     rw IncLoLang.Mod at H1,
 
-    have H: (IncLoLang.Mod C) ⊆ IncLoLang.Free (F{x ↣ hlC_v}), {
+    have H: (IncLoLang.Mod C) ⊆ IncLoLang.prop.Free (F{x ↣ hlC_v}), {
       calc IncLoLang.Mod C ⊆ (IncLoLang.Mod C \ {x}) ∪ {x} : (IncLoLang.Mod C).subset_diff_union ({x})
-      ... ⊆ (IncLoLang.Free F) ∪ {x} : set.union_subset_union_left ({x}) H1
-      ... ⊆ IncLoLang.Free (F{x ↣ hlC_v}): IncLoLang.p_thing_free,
+      ... ⊆ (IncLoLang.prop.Free F) ∪ {x} : set.union_subset_union_left ({x}) H1
+      ... ⊆ IncLoLang.prop.Free (F{x ↣ hlC_v}): IncLoLang.p_thing_free,
     },
     specialize C_ih H ty hlC_s₁ hlC_s₂ hlC_h,
     unfold IncLoLang.p_thing at C_ih,
@@ -604,7 +604,7 @@ begin
 end
 
 lemma constancy {P Q F: IncLoLang.state -> Prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}
-  (H1: IncLoLang.Mod C ⊆ IncLoLang.Free F) (H2: [* P *]C[* Q *]ty ):
+  (H1: IncLoLang.Mod C ⊆ IncLoLang.prop.Free F) (H2: [* P *]C[* Q *]ty ):
   [* λ st, P st ∧ F st *]C[* λ st, Q st ∧ F st *]ty :=
 begin
   rintros σ' ⟨ hσQ, hσF⟩,
@@ -658,6 +658,13 @@ begin
     exact star_seq H,
   }
 end
+
+lemma substitution_1 {P C Q ty} {e: IncLoLang.state → ℕ} {x: string} (H₁: [* P *]C[* Q *]ty) (H₂: (IncLoLang.expression.Free e ∪ {x}) ∩ IncLoLang.stmt.Free C = ∅): 
+  [* P[e//x] *] C{e//x} [* Q[e//x] *]ty := 
+begin
+  sorry,
+end
+
 
 /-! ### TODO: 
 

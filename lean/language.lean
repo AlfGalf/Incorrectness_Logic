@@ -72,18 +72,28 @@ end
   (λ_, val){name ↦ val} = (λ_, val) :=
 by apply funext; simp
 
+/-! # Propositions -/
+
+def prop: Type := state -> Prop
+
+/-! # Expression -/
+
+def expression: Type := state -> ℕ
+
 /-! ## Language -/
 
 inductive stmt : Type
 | skip            : stmt
-| assign          : string → (state → ℕ) → stmt
+| assign          : string → expression → stmt
 | non_det_assign  : string → stmt
 | seq             : stmt → stmt → stmt
-| error           : stmt
-| assumes         : (state → Prop) → stmt
 | choice          : stmt → stmt → stmt
 | star            : stmt → stmt
 | local_var       : string → stmt → stmt
+| error           : stmt
+| assumes         : prop → stmt
+
+-- Language notation
 
 infixr ` ;; ` : 90 := stmt.seq
 
@@ -96,7 +106,7 @@ notation `[` x ` ↣ ` e `]` := stmt.assign x e
 notation `[loc` x `.` C `]` := stmt.local_var x C
 
 /- This is the definition of P[x'/x] used in the paper -/
-def p_thing (P: IncLoLang.state -> Prop) (x': ℕ) (x: string) : IncLoLang.state -> Prop :=
+def p_thing (P: prop) (x': ℕ) (x: string) : IncLoLang.state -> Prop :=
   -- λ σ', ∃ σ, P σ ∧ σ' = σ{x ↦ x'}
   -- This is the definition given int he paper but it is wrong
   λ σ', P (σ'{x ↦ x'})
@@ -114,7 +124,7 @@ def repeat: IncLoLang.stmt → ℕ → IncLoLang.stmt
 | C nat.zero := IncLoLang.stmt.skip
 | C (nat.succ i) := (repeat C (i)) ;; C
 
-inductive lang_semantics: IncLoLang.stmt -> LogicType -> (IncLoLang.state) -> (IncLoLang.state) -> Prop
+inductive lang_semantics: IncLoLang.stmt -> LogicType -> IncLoLang.state -> IncLoLang.state -> Prop
 | skip {s} :
   lang_semantics IncLoLang.stmt.skip LogicType.ok s s
 | seq_ty {S T s t u ty} (H1: lang_semantics S LogicType.ok s t) (H2: lang_semantics T ty t u) :
@@ -127,7 +137,7 @@ inductive lang_semantics: IncLoLang.stmt -> LogicType -> (IncLoLang.state) -> (I
   lang_semantics (IncLoLang.stmt.assign x e) LogicType.ok s (s{x ↦ (e s)})
 | non_det_assign {x s v} :
   lang_semantics (IncLoLang.stmt.non_det_assign x) LogicType.ok s (s{x ↦ v})
-| assumes_ok {s} {B: IncLoLang.state -> Prop} (h: B s) :
+| assumes_ok {s} {B: prop} (h: B s) :
   lang_semantics (IncLoLang.stmt.assumes B) LogicType.ok s s
 | choice_left {C₁ C₂ ty s₁ s₂} (h: (lang_semantics C₁ ty s₁ s₂)): 
   lang_semantics (C₁ <+> C₂) ty s₁ s₂
@@ -138,8 +148,36 @@ inductive lang_semantics: IncLoLang.stmt -> LogicType -> (IncLoLang.state) -> (I
 | local_var {C s₁ s₂ ty x v} (h: lang_semantics C ty s₁ s₂):
   lang_semantics ([loc x . C]) ty (s₁{x ↦ v}) (s₂{x ↦ v})
 
-def Free (P: state -> Prop): set string :=
+/-! # Free-/
+
+def prop.Free (P: prop): set string :=
   λ x, ∀ σ v, (P σ ↔ P (σ{x ↦ v}))
+
+def stmt.Free (C: stmt): set string :=
+  λ x, ∀ σ σ' ty v, lang_semantics C ty σ σ' ↔ lang_semantics C ty (σ{x ↦ v}) (σ'{x ↦ v})
+
+def expression.Free (e: expression): set string :=
+  λ x, ∀ σ v, e σ = e (σ{x ↦ v})
+
+/-! # Substitute-/
+
+def prop.substitute : string → expression → prop → prop
+| x e P := λ σ, P (σ{x ↦ e σ})
+
+notation P `[` exp `//` name `]` :=  prop.substitute name exp P
+
+def stmt.substitute : string → expression → stmt → stmt
+| x e stmt.skip                 := stmt.skip
+| x e ([s ↣ e₂])                := [s ↣ λ σ, e₂ (σ{x ↦ e σ})]
+| x e (stmt.non_det_assign s)   := stmt.non_det_assign s
+| x e (C₁ ;; C₂)                := (stmt.substitute x e C₁) ;; (stmt.substitute x e C₂)
+| x e (C₁ <+> C₂)               := (stmt.substitute x e C₁) <+> (stmt.substitute x e C₂)
+| x e (C**)                     := (stmt.substitute x e C)**
+| x e [loc y . C]               := if x = y then [loc x . C] else [loc y . (stmt.substitute x e C)]
+| x e stmt.error                := stmt.error
+| x e (stmt.assumes P)          := stmt.assumes (P[e//x])
+
+notation C `{` exp `//` name `}` :=  stmt.substitute name exp C
 
 def Mod: stmt -> set string
 | (C₁ ;; C₂) := (Mod C₁) ∪ (Mod C₂)
@@ -184,12 +222,6 @@ begin
   finish,
 end
 
-lemma mod_star_eq (C: stmt):
-   Mod (C**) = Mod C :=
-begin 
-  rw Mod,
-end
-
 lemma start_seq {C: stmt} {σ σ': state} {ty: LogicType}:
   IncLoLang.lang_semantics (C** ;; C) ty σ σ' → IncLoLang.lang_semantics (C**) ty σ σ' :=
 begin
@@ -206,9 +238,7 @@ begin
     cases H with N,
     exact lang_semantics.star N H_h,
   },
-  {
-    exact h_H1,
-  },
+  { exact h_H1, },
 end
 
 lemma assign_order {σ x y v₁ v₂} (Hxy: x ≠ y) :
@@ -217,18 +247,9 @@ begin
   apply funext,
   intro z,
   by_cases h₁ : z = x,
-  {
-    rw h₁,
-    finish,
-  },
+  { finish, },
   by_cases h₂ : z = y,
-  {
-    rw h₂,
-    finish,
-  },
-  {
-    finish,
-  }
+  repeat{ finish, },
 end
 
 lemma assign_order_eq {σ x v₁ v₂}:
@@ -237,45 +258,17 @@ begin
   apply funext,
   intro z,
   by_cases h₁ : z = x,
-  {
-    rw h₁,
-    finish,
-  },
-  {
-    finish,
-  }
+  repeat { finish, },
 end
 
 lemma p_thing_free {x v} {P: state -> Prop} :
-  (Free P) ∪ { x } ⊆ Free (P{ x ↣ v }) :=
+  (prop.Free P) ∪ { x } ⊆ prop.Free (P{ x ↣ v }) :=
 begin
-  -- apply set.eq_of_subset_of_subset,
-  -- {
-  --   intro y,
-  --   unfold Free,
-  --   intro h,
-  --   unfold p_thing at h,
-
-
-
-  --   -- by_cases hyx: y = x,
-  --   -- {
-  --   --   right,
-  --   --   exact set.mem_singleton_iff.mpr hyx,
-  --   -- },
-  --   -- {
-  --   --   left,
-  --   --   intros σ v,
-  --   --   -- specialize h y,
-
-  --   -- },
-  --   sorry,
-  -- },
   intros y hx,
   cases hx,
   {
-    unfold Free,
-    unfold Free at hx,
+    unfold prop.Free,
+    unfold prop.Free at hx,
     intros σ v₂,
     {
       unfold p_thing,
@@ -298,7 +291,7 @@ begin
     {
       simp at hx,
       rw hx,
-      unfold Free,
+      unfold prop.Free,
       intros σ v,
       split,
       repeat { unfold p_thing, finish,},
