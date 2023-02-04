@@ -211,30 +211,99 @@ begin
   },
 end
 
-lemma p_thing_free {x v} {P: state -> Prop} :
-  Free (P{ x ↣ v }) = (Free P) ∪ { x } :=
+lemma assign_order {σ x y v₁ v₂} (Hxy: x ≠ y) :
+  σ{x ↦ v₁}{y ↦ v₂} = σ{y ↦ v₂}{x ↦ v₁} :=
 begin
-  apply set.eq_of_subset_of_subset,
+  apply funext,
+  intro z,
+  by_cases h₁ : z = x,
   {
-    intro y,
-    unfold Free,
-    sorry,
+    rw h₁,
+    finish,
+  },
+  by_cases h₂ : z = y,
+  {
+    rw h₂,
+    finish,
   },
   {
-    intros y hx,
-    cases hx,
-    {
-      unfold Free,
-      unfold Free at hx,
-      intros σ v,
-
-    },
-    {
-
-    }
-
+    finish,
   }
+end
 
+lemma assign_order_eq {σ x v₁ v₂}:
+  σ{x ↦ v₁}{x ↦ v₂} = σ{x ↦ v₂} :=
+begin
+  apply funext,
+  intro z,
+  by_cases h₁ : z = x,
+  {
+    rw h₁,
+    finish,
+  },
+  {
+    finish,
+  }
+end
+
+lemma p_thing_free {x v} {P: state -> Prop} :
+  (Free P) ∪ { x } ⊆ Free (P{ x ↣ v }) :=
+begin
+  -- apply set.eq_of_subset_of_subset,
+  -- {
+  --   intro y,
+  --   unfold Free,
+  --   intro h,
+  --   unfold p_thing at h,
+
+
+
+  --   -- by_cases hyx: y = x,
+  --   -- {
+  --   --   right,
+  --   --   exact set.mem_singleton_iff.mpr hyx,
+  --   -- },
+  --   -- {
+  --   --   left,
+  --   --   intros σ v,
+  --   --   -- specialize h y,
+
+  --   -- },
+  --   sorry,
+  -- },
+  intros y hx,
+  cases hx,
+  {
+    unfold Free,
+    unfold Free at hx,
+    intros σ v₂,
+    {
+      unfold p_thing,
+      by_cases x = y,
+      {
+        split,
+        repeat {
+          rw h,
+          rw assign_order_eq,
+          exact id,
+        }
+      },
+      {
+        rw ← assign_order h,
+        exact (hx (σ{x ↦ v}) v₂), 
+      }
+    },
+  },
+  {
+    {
+      simp at hx,
+      rw hx,
+      unfold Free,
+      intros σ v,
+      split,
+      repeat { unfold p_thing, finish,},
+    }
+  }
 end
 
 end IncLoLang

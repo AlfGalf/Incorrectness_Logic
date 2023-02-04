@@ -308,27 +308,29 @@ begin
   rcases hσ' with ⟨x', ⟨ hPσ', hES⟩ ⟩ ,
 
   /- hES says that the value of x' after assignment is the value of e with state σ'{x ↦ x'} -/
+  unfold IncLoLang.p_thing at hPσ',
 
   /- Recover the start state -/
-  rcases hPσ' with ⟨ σ, ⟨ hPσ, hσσ' ⟩ ⟩,
-
-  use σ,
+  use σ'{x ↦ x'},
 
   split,
   {
-    exact hPσ,
+    exact hPσ',
   },
   {
-    have H2: σ' = σ{x ↦ e σ}, {
+    -- s = σ'{x ↦ x'}
+    -- s{x ↦ (e s)}
+
+    have H2: σ' = (σ'{x ↦ x'}){x ↦ e (σ'{x ↦ x'})}, {
       apply funext,
       intro v,
       by_cases v = x,
       {finish,},
       {finish,}
     },
-    rw H2,
 
-    exact IncLoLang.lang_semantics.assign
+    nth_rewrite 1 H2,
+    exact IncLoLang.lang_semantics.assign,
   },
 end
 
@@ -349,24 +351,27 @@ begin
   /- recover the x' -/
   rcases hσ' with ⟨x', hPσ'⟩ ,
 
-  /- Recover the start state -/
-  rcases hPσ' with ⟨ σ, ⟨ hPσ, hσσ' ⟩ ⟩,
+  -- /- Recover the start state -/
+  -- rcases hPσ' with ⟨ σ, ⟨ hPσ, hσσ' ⟩ ⟩,
+  -- use σ,
+  use σ'{x ↦ x'},
 
-  use σ,
+  unfold IncLoLang.p_thing at hPσ',
 
   split,
   {
-    exact hPσ,
+    exact hPσ',
   },
   {
-    have H: σ' = σ{x ↦ σ' x}, {
+    have H: σ' = σ'{x ↦ x'}{x ↦ σ' x}, {
       apply funext,
       intro v,
       by_cases x = v,
       {finish,},
       {finish,}
     },
-    rw H,
+    nth_rewrite 1 H,
+
     exact IncLoLang.lang_semantics.non_det_assign
   },
 end
@@ -488,7 +493,7 @@ end
 -- Want to show, if Mod(C) \ Free(F) = ∅ then constancy
 lemma consistency_helper {C: IncLoLang.stmt} 
   (F: IncLoLang.state -> Prop) 
-  (H1: ∀ x, x ∈ IncLoLang.Mod(C) → (IncLoLang.Free(F)(x))):
+  (H1: IncLoLang.Mod C ⊆  IncLoLang.Free F):
   ∀ ty σ σ', IncLoLang.lang_semantics C ty σ σ' → (F σ ↔ F σ') :=
 begin
   induction C generalizing F,
@@ -500,7 +505,7 @@ begin
   case IncLoLang.stmt.assign {
     intros ty σ σ' H2,
     --  hσ,
-    specialize H1 C_ᾰ,
+    -- specialize H1 C_ᾰ,
     unfold IncLoLang.Mod at H1,
     simp at H1,
     unfold IncLoLang.Free at H1,
@@ -511,7 +516,7 @@ begin
   },
   case IncLoLang.stmt.non_det_assign {
     intros ty σ σ' H2,
-    specialize H1 C,
+    -- specialize H1 C,
     unfold IncLoLang.Mod at H1,
     simp at H1,
     unfold IncLoLang.Free at H1,
@@ -547,11 +552,11 @@ begin
     intros σ σ' ty h,
     have freeLeft: (∀ (x : string), x ∈ IncLoLang.Mod leftC → IncLoLang.Free F x), {
       intros x hx,
-      exact H1 x (IncLoLang.mod_elem_left_elem_choice leftC rightC x hx),
+      exact H1 (IncLoLang.mod_elem_left_elem_choice leftC rightC x hx),
     },
     have freeRight: (∀ (x : string), x ∈ IncLoLang.Mod rightC → IncLoLang.Free F x), {
       intros x hx,
-      exact H1 x (IncLoLang.mod_elem_right_elem_choice leftC rightC x hx),
+      exact H1 (IncLoLang.mod_elem_right_elem_choice leftC rightC x hx),
     },
 
     cases h,
@@ -582,13 +587,17 @@ begin
     -/
 
     intros ty σ σ' hlC,
-
     cases hlC,
+
+    specialize C_ih (F{ x ↣ hlC_v}),
+    rw IncLoLang.Mod at H1,
+
+    -- cases hlC,
   },
 end
 
 lemma constancy {P Q F: IncLoLang.state -> Prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}
-  (H1: ∀ x, IncLoLang.Mod(C)(x) → (IncLoLang.Free(F)(x))) (H2: [* P *]C[* Q *]ty ):
+  (H1: IncLoLang.Mod C ⊆ IncLoLang.Free F) (H2: [* P *]C[* Q *]ty ):
   [* λ st, P st ∧ F st *]C[* λ st, Q st ∧ F st *]ty :=
 begin
   rintros σ' ⟨ hσQ, hσF⟩,
@@ -601,7 +610,7 @@ begin
     split,
     { exact hσ', },
     {
-      exact (consistency_helper H1 ty σ σ' hσ'').2 hσF,
+      exact (consistency_helper F H1 ty σ σ' hσ'').2 hσF,
     },
   },
   {exact hσ'',},
