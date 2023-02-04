@@ -380,8 +380,10 @@ end
 /- Consistency for the seq case -/
 lemma helper_consistency_seq (F: IncLoLang.state -> Prop) (leftC rightC: IncLoLang.stmt) (σstart σend: IncLoLang.state)
   (H1: ∀ x, x ∈ IncLoLang.Mod (leftC;;rightC) → (IncLoLang.prop.Free(F)(x)))
-  (hLeft: (∀ (x : string), x ∈ IncLoLang.Mod leftC → IncLoLang.prop.Free F x) → ∀ (ty : IncLoLang.LogicType) (σ σ' : IncLoLang.state), IncLoLang.lang_semantics leftC ty σ σ' → (F σ ↔ F σ'))
-  (hRight: (∀ (x : string), x ∈ IncLoLang.Mod rightC → IncLoLang.prop.Free F x) → ∀ (ty : IncLoLang.LogicType) (σ σ' : IncLoLang.state), IncLoLang.lang_semantics rightC ty σ σ' → (F σ ↔ F σ')):
+  (hLeft: (∀ (x : string), x ∈ IncLoLang.Mod leftC → IncLoLang.prop.Free F x) → 
+    ∀ (ty : IncLoLang.LogicType) (σ σ' : IncLoLang.state), IncLoLang.lang_semantics leftC ty σ σ' → (F σ ↔ F σ'))
+  (hRight: (∀ (x : string), x ∈ IncLoLang.Mod rightC → IncLoLang.prop.Free F x) → 
+    ∀ (ty : IncLoLang.LogicType) (σ σ' : IncLoLang.state), IncLoLang.lang_semantics rightC ty σ σ' → (F σ ↔ F σ')):
   ∀ ty, IncLoLang.lang_semantics (leftC ;; rightC) ty σstart σend → (F σstart ↔ F σend) :=
 begin
     intro ty,
@@ -436,7 +438,8 @@ end
 
 /- Consistency for the star case -/
 lemma star_helper {F: IncLoLang.state -> Prop} {C: IncLoLang.stmt} :
-  (∀ ty σ σ', IncLoLang.lang_semantics C ty σ σ' → (F σ ↔ F σ')) → (∀ ty σ σ', IncLoLang.lang_semantics (C**) ty σ σ' → (F σ ↔ F σ')) :=
+  (∀ ty σ σ', IncLoLang.lang_semantics C ty σ σ' → (F σ ↔ F σ')) → 
+    (∀ ty σ σ', IncLoLang.lang_semantics (C**) ty σ σ' → (F σ ↔ F σ')) :=
 begin
   intros h ty σ σ',
   intro Hls,
@@ -659,9 +662,24 @@ begin
   }
 end
 
-lemma substitution_1 {P C Q ty} {e: IncLoLang.state → ℕ} {x: string} (H₁: [* P *]C[* Q *]ty) (H₂: (IncLoLang.expression.Free e ∪ {x}) ∩ IncLoLang.stmt.Free C = ∅): 
+lemma local_variable {P C Q ty y} {x: string} 
+   (H₁: [* P *] C{(λ _, y)//x} [* Q *]ty) (H₂: y ∉ (IncLoLang.prop.Free P ∪ IncLoLang.stmt.Free C)): 
+  [* P *] [loc x . C ] [* λ σ, ∃ y, Q[(λ _, y)//x] σ *]ty :=
+begin
+  sorry
+end
+
+lemma substitution_1 {P C Q ty} {e: IncLoLang.state → ℕ} {x: string} 
+  (H₁: [* P *]C[* Q *]ty) (H₂: (IncLoLang.expression.Free e ∪ {x}) ∩ IncLoLang.stmt.Free C = ∅): 
   [* P[e//x] *] C{e//x} [* Q[e//x] *]ty := 
 begin
+  intros σ' hσ',
+  unfold IncLoLang.prop.substitute at hσ',
+  specialize H₁ (σ'{x ↦ e σ'}) hσ', 
+  rcases H₁ with ⟨ σ, ⟨ hpσ, hC ⟩⟩,
+  use σ, -- WRONG
+  split,
+  sorry,
   sorry,
 end
 
@@ -671,7 +689,8 @@ end
 - [x] Assignment
 - [x] Nondet Assignment
 - [x] Constancy
-- [x] Local variable !!
+- [x] Local variable encoding
+- [ ] Local variable rule
 - [ ] Substitution 1
 - [ ] Substitution 2
 - [x] Backwards varient
