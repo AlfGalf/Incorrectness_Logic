@@ -664,7 +664,7 @@ end
 - [x] Assignment
 - [x] Nondet Assignment
 - [x] Constancy
-- [ ] Local variable !!
+- [x] Local variable !!
 - [ ] Substitution 1
 - [ ] Substitution 2
 - [x] Backwards varient
