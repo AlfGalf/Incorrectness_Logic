@@ -134,8 +134,8 @@ inductive lang_semantics: IncLoLang.stmt -> LogicType -> IncLoLang.state -> IncL
 | error {s}:
   lang_semantics IncLoLang.stmt.error LogicType.er s s
 | assign {x s e} :
-  lang_semantics (IncLoLang.stmt.assign x e) LogicType.ok s (s{x ↦ (e s)})
-| non_det_assign {x s v} :
+  lang_semantics [x ↣ e] LogicType.ok s (s{x ↦ (e s)})
+| non_det_assign {x s} (v: ℕ) :
   lang_semantics (IncLoLang.stmt.non_det_assign x) LogicType.ok s (s{x ↦ v})
 | assumes_ok {s} {B: prop} (h: B s) :
   lang_semantics (IncLoLang.stmt.assumes B) LogicType.ok s s
@@ -154,30 +154,42 @@ def prop.Free (P: prop): set string :=
   λ x, ∀ σ v, (P σ ↔ P (σ{x ↦ v}))
 
 def stmt.Free (C: stmt): set string :=
-  λ x, ∀ σ σ' ty v, lang_semantics C ty σ σ' ↔ lang_semantics C ty (σ{x ↦ v}) (σ'{x ↦ v})
+  λ x, ∀ σ σ' ty v, lang_semantics C ty σ σ' → lang_semantics C ty (σ{x ↦ v}) (σ'{x ↦ v})
 
 def expression.Free (e: expression): set string :=
   λ x, ∀ σ v, e σ = e (σ{x ↦ v})
 
 /-! # Substitute-/
 
-def prop.substitute : string → expression → prop → prop
-| x e P := λ σ, P (σ{x ↦ e σ})
+def state.substitute : string → string → state → state
+| x y := λ σ, σ{y ↦ σ x}
+-- | x y := λ σ, σ{y ↦ σ x}{x ↦ 0}
 
-notation P `[` exp `//` name `]` :=  prop.substitute name exp P
+notation σ `⟨` vto `//` vfrom `⟩` :=  state.substitute vto vfrom σ
 
-def stmt.substitute : string → expression → stmt → stmt
-| x e stmt.skip                 := stmt.skip
-| x e ([s ↣ e₂])                := [s ↣ λ σ, e₂ (σ{x ↦ e σ})]
-| x e (stmt.non_det_assign s)   := stmt.non_det_assign s
-| x e (C₁ ;; C₂)                := (stmt.substitute x e C₁) ;; (stmt.substitute x e C₂)
-| x e (C₁ <+> C₂)               := (stmt.substitute x e C₁) <+> (stmt.substitute x e C₂)
-| x e (C**)                     := (stmt.substitute x e C)**
-| x e [loc y . C]               := if x = y then [loc x . C] else [loc y . (stmt.substitute x e C)]
-| x e stmt.error                := stmt.error
-| x e (stmt.assumes P)          := stmt.assumes (P[e//x])
+def prop.substitute : string → string → prop → prop
+| x s P := λ σ, P (σ{x ↦ σ s})
+
+notation P `[` val `//` name `]` :=  prop.substitute name val P
+
+def expression.substitute : string → string → expression → expression
+| x y e := λ σ, e (σ⟨ y // x ⟩)
+
+
+def stmt.substitute : string → string → stmt → stmt
+| x y stmt.skip                 := stmt.skip
+| x y ([z ↣ e₂])                := if x = z then [y ↣ λ σ, ((expression.substitute x y e₂) σ)] else [z ↣ λ σ, ((expression.substitute x y e₂) σ)]  -- PUT X BACK!
+| x y (stmt.non_det_assign s)   := stmt.non_det_assign s
+| x y (C₁ ;; C₂)                := (stmt.substitute x y C₁) ;; (stmt.substitute x y C₂)
+| x y (C₁ <+> C₂)               := (stmt.substitute x y C₁) <+> (stmt.substitute x y C₂)
+| x y (C**)                     := (stmt.substitute x y C)**
+| x y [loc z . C]               := if x = z then [loc x . C] else [loc z . (stmt.substitute x y C)]
+| x y stmt.error                := stmt.error
+| x y (stmt.assumes P)          := stmt.assumes (P[y//x])
 
 notation C `{` exp `//` name `}` :=  stmt.substitute name exp C
+
+/-! ## Mod -/
 
 def Mod: stmt -> set string
 | (C₁ ;; C₂) := (Mod C₁) ∪ (Mod C₂)
@@ -299,4 +311,240 @@ begin
   }
 end
 
+lemma assign_semantics {x σ σ' ty} {e: expression}: 
+  lang_semantics ([x ↣ e]) ty σ σ' → σ{x ↦ e σ} = σ' ∧ ty = LogicType.ok:=
+begin
+  intro h,
+  cases h,
+  split,
+  repeat { refl },
+end
+
+lemma non_det_assign_semantics {x σ σ' ty}: 
+  lang_semantics (stmt.non_det_assign x) ty σ σ' → ∃ v, σ' = σ{x ↦ v} ∧ ty = LogicType.ok :=
+begin
+  intro h,
+  cases h,
+  use h_v,
+  split,
+  repeat { refl },
+end
+
+lemma free_assign {x e}: (stmt.Free ([x ↣ e])) ⊆ (expression.Free e) ∪ {x} :=
+begin
+  intros y hy,
+  by_cases x = y,
+  {
+    cases h,
+    right,
+    exact set.mem_singleton x,
+  },
+  {
+    left,
+    intros σ v,
+    specialize hy σ (σ{x ↦ e σ}) LogicType.ok v,
+    have H := hy (lang_semantics.assign),
+
+    have H2 := assign_semantics H,
+    have H3 : (σ{y ↦ v}{x ↦ e (σ{y ↦ v})}) x = e (σ{y ↦ v}), {
+      exact state.update_apply x (e (σ{y ↦ v})) (σ{y ↦ v}),
+    },
+
+    rw ← H3,
+  
+    have H4 : σ{x ↦ e σ}{y ↦ v} x = e σ, { finish },
+    rw ← H4,
+
+    exact congr (eq.symm H2.left) rfl,
+  },
+end
+
+lemma free_assign_2 {x e}: (expression.Free e) \ {x} ⊆ (stmt.Free ([x ↣ e])) :=
+begin
+  intros y hy,
+  intros σ σ' ty v,
+  cases hy,
+
+  specialize hy_left σ v,
+  intro h,
+  cases h,
+  rw ← state.update,
+  rw assign_order (ne.symm hy_right),
+  rw hy_left,
+  exact lang_semantics.assign,
+end
+
+lemma free_non_det_assign {x}: ∀ n, n ∈ (stmt.Free (stmt.non_det_assign x)) :=
+begin
+  unfold stmt.Free,
+
+  intro n,
+  by_cases n = x,
+  {
+    cases h,
+    intros σ σ' ty v hls,
+    cases hls,
+    have H: (λ (name' : string), ite (name' = x) hls_v (σ name')){x ↦ v} = σ{x ↦ v}{x ↦ v},
+    {
+      funext,
+      by_cases name' = x,
+      { finish, },
+      { finish, }
+    },
+    rw H,
+    exact lang_semantics.non_det_assign v,
+  },
+  {
+    intros σ σ' ty v hls,
+    cases hls,
+    rw ← state.update,
+    rw assign_order (ne.symm h),
+    exact lang_semantics.non_det_assign hls_v,
+  },
+end
+
+lemma substitution_rule {ty C y x} {σ σ' : state} (Hyx: y ≠ x) (Hfreey: y ∈ stmt.Free C):
+  lang_semantics C ty (σ) (σ') -> 
+    -- If C can take σ to σ'
+    lang_semantics (C{y // x}) ty (σ⟨ y // x⟩) (σ'⟨ y // x ⟩) :=
+    -- Then C(y/x) can take σ with y set to x's value in σ to σ' with y set to x's value in σ' 
+begin
+  revert ty σ σ',
+
+  induction C with z e z,
+  case stmt.skip {
+    -- Skip case is trivial as σ = σ'
+    intros _ σ _ h,
+    cases h,
+    exact lang_semantics.skip,
+  },
+  case stmt.assign {
+    intro s,
+    have H := free_assign Hfreey,
+    intros σ σ' hls,
+    cases hls,
+    cases hls,
+    rw stmt.substitute,
+    cases H,
+    { -- case y ∈ Free e
+      sorry,
+    },
+    { -- case y = z
+      sorry,
+    },
+  },
+  case stmt.non_det_assign {
+    intros ty σ σ' hls,
+
+    by_cases x = z,
+    {
+      cases h,
+      rw stmt.substitute,
+      cases hls,
+      unfold state.substitute,
+      have H: σ{x ↦ σ y}{x ↦ (σ y)} = (λ (name' : string), ite (name' = x) hls_v (σ name')){x ↦ ite (y = x) hls_v (σ y)}, 
+      {
+        funext,
+        by_cases name' = x,
+        { finish, },
+        { finish, },
+      },
+      rw ← H,
+      exact lang_semantics.non_det_assign (σ y),
+    },
+
+    have H: ∃ v, σ'⟨y//x⟩ = σ⟨y//x⟩{z ↦ v},
+    {
+      cases hls,
+      use hls_v,
+      rw state.substitute,
+      simp,
+      rw ← state.update,
+      rw ← state.update at hls,
+
+      by_cases H₂: x = y,
+      {
+        cases H₂,
+        funext,
+        rw if_neg h,
+        rw assign_order h,
+      },
+      {
+        funext,
+        rw if_neg h,
+
+      }
+      -- ow
+
+
+    },
+
+    have H2: ty = LogicType.ok, { cases hls, refl, },
+    rw H2,
+
+    -- | non_det_assign {x s v} :
+    --   lang_semantics (IncLoLang.stmt.non_det_assign x) LogicType.ok s (s{x ↦ v})
+
+    rw stmt.substitute,
+    cases H,
+    rw H_h,
+
+    exact lang_semantics.non_det_assign H_w,
+  },
+
+  sorry,
+  sorry,
+  sorry,
+  sorry,
+  sorry,
+  sorry,
+end
+
 end IncLoLang
+
+/-
+      intros σ σ' h,
+      cases h,
+      rw stmt.substitute,
+      by_cases Hx: x = z,
+      {
+        rw if_pos Hx,
+        rw state.substitute,
+        simp,
+        have H2 := H σ (σ x),
+
+        have h2: σ{z ↦ e σ}⟨y//x⟩ = σ⟨y//x⟩{y ↦ (λ (σ : state), e (σ{y ↦ σ x})) (σ⟨y//x⟩)},
+        {
+          simp,
+          rw ← Hx,
+          unfold state.substitute,
+          rw assign_order_eq,
+
+          funext,
+          rw ← H (σ{x ↦ σ y}) (σ{x ↦ σ y} x),
+          by_cases hx: name' = x,
+          { finish, },
+          { 
+            by_cases hy: name' = y,
+            {
+              rw hy,
+              rw hy at hx,
+              unfold state.update,
+              rw if_neg hx,
+              have H3: y = y, {refl,},
+              rw if_pos H3,
+              rw ← state.update,
+
+              cases h,
+              
+            },
+            {
+
+            }
+          }
+        },
+        rw ← state.update,
+
+        rw h2,
+        exact lang_semantics.assign,
+-/

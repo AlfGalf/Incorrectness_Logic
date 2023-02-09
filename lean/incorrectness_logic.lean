@@ -662,11 +662,40 @@ begin
   }
 end
 
-lemma local_variable {P C Q ty y} {x: string} 
-   (H₁: [* P *] C{(λ _, y)//x} [* Q *]ty) (H₂: y ∉ (IncLoLang.prop.Free P ∪ IncLoLang.stmt.Free C)): 
-  [* P *] [loc x . C ] [* λ σ, ∃ y, Q[(λ _, y)//x] σ *]ty :=
+lemma local_variable {P C Q ty} {y x: string} 
+  (H₁: [* P *] C{(λ σ, σ y)//x} [* Q *]ty) 
+  -- Seems to be another encoding mistake? Needs to be in Free P and Free C!
+  (H₂: y ∈ (IncLoLang.prop.Free P ∩ IncLoLang.stmt.Free C)): 
+  [* P *] [loc x . C ] [* λ σ, ∃ v_y: ℕ, Q (σ{y ↦ v_y}) *]ty :=
 begin
-  sorry
+  -- Following proof in the paper
+  -- Suppose [p]C(y/x)[ε:q] and (σq | x → v,y → vy) ∈ ∃y.q.
+  intros σq hσq,
+  -- (vy = σ y)
+  -- Then (σq |x→v,y→v2) ∈ q for some v2
+  cases hσq with v₂,
+
+  -- We execute C(y/x) backwards and get (σp | x → v, y → v1) ∈ p by the Characterization Lemma.
+  specialize H₁ (σq{y ↦ v₂}) hσq_h,
+  rcases H₁ with ⟨ σp, ⟨ hσp, hls ⟩ ⟩,
+
+  -- Since p is independent of y we can set y back to vy and it will still be in p: (σp | x → v,y → vy) ∈ p.
+  have hσq' : P (σp{y ↦ σq y}), {
+    have hyFree: y ∈ IncLoLang.prop.Free P, {exact H₂.left,}, 
+    exact (hyFree σp (σq y)).mp hσp,
+  },
+
+  -- This sequence of steps can be mimicked in the semantics of local x.C, 
+  -- stepping from (σq | x → v,y → vy) via backwards finalization to (σq |x → v,y → vy),
+  use σp{y ↦ σq y},
+  -- then backwards via C to (σp |x → v, y → vy), and then via backwards initialization to (σp |x → v,y → vy)
+  split,
+  {
+    exact hσq',
+  },
+  {
+    
+  }
 end
 
 lemma substitution_1 {P C Q ty} {e: IncLoLang.state → ℕ} {x: string} 
