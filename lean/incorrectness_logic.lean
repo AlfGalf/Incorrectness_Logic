@@ -586,42 +586,42 @@ begin
 
     exact (star_helper C_ih) ty startst endst h,
   },
-  case IncLoLang.stmt.local_var {
-    rename C_ᾰ x,
-    rename C_ᾰ_1 C,
+  -- case IncLoLang.stmt.local_var {
+  --   rename C_ᾰ x,
+  --   rename C_ᾰ_1 C,
 
-    /- 
-      ∀ (y : string), y ∈ IncLoLang.Mod [loc x . C] → IncLoLang.Free F y
-      If y is modified by [loc x . C] then F is free on y (ie. if C modifies y (and y != x??) they F free on y)
+  --   /- 
+  --     ∀ (y : string), y ∈ IncLoLang.Mod [loc x . C] → IncLoLang.Free F y
+  --     If y is modified by [loc x . C] then F is free on y (ie. if C modifies y (and y != x??) they F free on y)
 
-      IncLoLang.lang_semantics [locx.C] ty σ σ' → (F σ ↔ F σ')
-    -/
+  --     IncLoLang.lang_semantics [locx.C] ty σ σ' → (F σ ↔ F σ')
+  --   -/
 
-    intros ty σ σ' hlC,
-    cases hlC,
+  --   intros ty σ σ' hlC,
+  --   cases hlC,
 
-    specialize C_ih (F{ x ↣ hlC_v}),
-    rw IncLoLang.Mod at H1,
+  --   specialize C_ih (F{ x ↣ hlC_v}),
+  --   rw IncLoLang.Mod at H1,
 
-    have H: (IncLoLang.Mod C) ∩ IncLoLang.prop.Free (F{x ↣ hlC_v}) ⊆ ∅, {
-      calc (IncLoLang.Mod C) ∩ IncLoLang.prop.Free (F{x ↣ hlC_v}) ⊆ (IncLoLang.Mod C) ∩ (IncLoLang.prop.Free (F) \ {x}) : (IncLoLang.Mod C).inter_subset_inter_right (IncLoLang.p_thing_free)
-      ... = (IncLoLang.Mod C \ {x}) ∩ IncLoLang.prop.Free F : (by {
-        -- exact help,
-        have H: ∀ x: Type, ∀ A B C: set x, (A ∩ (B \ C)) = (A \ C) ∩ B ,
-        {
-          intros x a b c,
-          ext,
-          finish,
-        },
-        exact H string (IncLoLang.Mod C) (IncLoLang.prop.Free F) ({x}),
-      })
-      ... = ∅ : H1,
-    },
-    have H: (IncLoLang.Mod C) ∩ IncLoLang.prop.Free (F{x ↣ hlC_v}) = ∅, { exact set.subset_eq_empty H rfl, },
-    specialize C_ih H ty hlC_s₁ hlC_s₂ hlC_h,
-    unfold IncLoLang.p_thing at C_ih,
-    exact C_ih,
-  },
+  --   have H: (IncLoLang.Mod C) ∩ IncLoLang.prop.Free (F{x ↣ hlC_v}) ⊆ ∅, {
+  --     calc (IncLoLang.Mod C) ∩ IncLoLang.prop.Free (F{x ↣ hlC_v}) ⊆ (IncLoLang.Mod C) ∩ (IncLoLang.prop.Free (F) \ {x}) : (IncLoLang.Mod C).inter_subset_inter_right (IncLoLang.p_thing_free)
+  --     ... = (IncLoLang.Mod C \ {x}) ∩ IncLoLang.prop.Free F : (by {
+  --       -- exact help,
+  --       have H: ∀ x: Type, ∀ A B C: set x, (A ∩ (B \ C)) = (A \ C) ∩ B ,
+  --       {
+  --         intros x a b c,
+  --         ext,
+  --         finish,
+  --       },
+  --       exact H string (IncLoLang.Mod C) (IncLoLang.prop.Free F) ({x}),
+  --     })
+  --     ... = ∅ : H1,
+  --   },
+  --   have H: (IncLoLang.Mod C) ∩ IncLoLang.prop.Free (F{x ↣ hlC_v}) = ∅, { exact set.subset_eq_empty H rfl, },
+  --   specialize C_ih H ty hlC_s₁ hlC_s₂ hlC_h,
+  --   unfold IncLoLang.p_thing at C_ih,
+  --   exact C_ih,
+  -- },
 end
 
 lemma constancy {P Q F: IncLoLang.state -> Prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}
@@ -680,67 +680,125 @@ begin
   }
 end
 
-lemma local_variable {P C Q ty} {y x: string} 
-  (H₁: [* P *] C{y//x} [* Q *]ty) 
-  (H₂: y ∉ (IncLoLang.prop.Free P ∪ IncLoLang.stmt.Free C))
-  (H₃: y ≠ x): 
-    [* P *] [loc x . C ] [* λ σ, ∃ v_y: ℕ, Q (σ{y ↦ v_y}) *]ty :=
-begin
-  -- Following proof in the paper
-  -- Suppose [p]C(y/x)[ε:q] and (σq | x → v,y → vy) ∈ ∃y.q.
-  intros σq Hσq,
-  -- (vy = σq y)
-  -- (v = σq x)
-  -- Then (σq |x→v,y→v2) ∈ q for some v2
-  cases Hσq with v₂,
+-- lemma local_variable {P C Q ty} {y x: string} 
+--   (H₁: [* P *] C{y//x} [* Q *]ty) 
+--   (H₂: y ∉ (IncLoLang.prop.Free P ∪ IncLoLang.stmt.Free C))
+--   (H₃: y ≠ x): 
+--     [* P *] [loc x . C ] [* λ σ, ∃ v_y: ℕ, Q (σ{y ↦ v_y}) *]ty :=
+-- begin
+--   -- Following proof in the paper
+--   -- Suppose [p]C(y/x)[ε:q] and (σq | x → v,y → vy) ∈ ∃y.q.
+--   intros σq Hσq,
+--   -- (vy = σq y)
+--   -- (v = σq x)
+--   -- Then (σq |x→v,y→v2) ∈ q for some v2
+--   cases Hσq with v₂,
 
-  -- We execute C(y/x) backwards and get (σp | x → v, y → v1) ∈ p by the Characterization Lemma.
-  specialize H₁ (σq{y ↦ v₂}) Hσq_h,
-  rcases H₁ with ⟨ σp, ⟨ hσp, hls ⟩ ⟩,
-  -- v1 = σp y 
-  have Hxpq : σp x = σq x, { sorry, }, -- Prove x is the same as y doesnt touch x
+--   -- We execute C(y/x) backwards and get (σp | x → v, y → v1) ∈ p by the Characterization Lemma.
+--   specialize H₁ (σq{y ↦ v₂}) Hσq_h,
+--   rcases H₁ with ⟨ σp, ⟨ hσp, hls ⟩ ⟩,
+--   -- v1 = σp y 
+--   have Hxpq : σp x = σq x, { sorry, }, -- Prove x is the same as y doesnt touch x
 
-  -- Since p is independent of y we can set y back to vy and it will still be in p: (σp | x → v,y → vy) ∈ p.
-  have hσq' : P (σp{y ↦ σq y}), {
-    have hyFree: y ∉ IncLoLang.prop.Free P, {by_contra, apply H₂, left, exact h,}, 
-    have hyFree := IncLoLang.not_free_prop hyFree,
-    exact (hyFree σp (σq y)).mp hσp,
-  },
+--   -- Since p is independent of y we can set y back to vy and it will still be in p: (σp | x → v,y → vy) ∈ p.
+--   have hσq' : P (σp{y ↦ σq y}), {
+--     have hyFree: y ∉ IncLoLang.prop.Free P, {by_contra, apply H₂, left, exact h,}, 
+--     have hyFree := IncLoLang.not_free_prop hyFree,
+--     exact (hyFree σp (σq y)).mp hσp,
+--   },
 
-  have hyFreeC: y ∉ IncLoLang.stmt.Free C, {by_contra, apply H₂, right, exact h,}, 
-  have hyFreeC := IncLoLang.free_language_semantics C y hyFreeC, 
-  -- This sequence of steps can be mimicked in the semantics of local x.C, 
-  -- stepping from (σq | x → v,y → vy) via backwards finalization to (σq |x → v,y → vy),
-  use (σp{y ↦ σq y}),
-  -- then backwards via C to (σp |x → v, y → vy), and then via backwards initialization to (σp |x → v,y → vy)
-  split,
-  {
-    exact hσq',
-  },
-  {
-    -- have H: σp{y ↦ σq y} = σp{y ↦ σq y}{x ↦ 0}, {sorry,},
-    -- rw H,
-    -- have H: σq = σq{x ↦ 0}, {sorry,},
-    -- rw H,
-    rw ← IncLoLang.update_id x σp,
-    rw IncLoLang.update_swap _ _ _ _ _ H₃,
-    nth_rewrite 1 ← IncLoLang.update_id x σq,
-    rw Hxpq,
+--   have hyFreeC: y ∉ IncLoLang.stmt.Free C, {by_contra, apply H₂, right, exact h,}, 
+--   have hyFreeC := IncLoLang.free_language_semantics C y hyFreeC, 
+--   -- This sequence of steps can be mimicked in the semantics of local x.C, 
+--   -- stepping from (σq | x → v,y → vy) via backwards finalization to (σq |x → v,y → vy),
+--   use (σp{y ↦ σq y}),
+--   -- then backwards via C to (σp |x → v, y → vy), and then via backwards initialization to (σp |x → v,y → vy)
+--   split,
+--   {
+--     exact hσq',
+--   },
+--   {
+--     -- have H: σp{y ↦ σq y} = σp{y ↦ σq y}{x ↦ 0}, {sorry,},
+--     -- rw H,
+--     -- have H: σq = σq{x ↦ 0}, {sorry,},
+--     -- rw H,
+--     rw ← IncLoLang.update_id x σp,
+--     rw IncLoLang.update_swap _ _ _ _ _ H₃,
+--     nth_rewrite 1 ← IncLoLang.update_id x σq,
+--     rw Hxpq,
 
-    apply IncLoLang.lang_semantics.local_var x (σq x),
+--     apply IncLoLang.lang_semantics.local_var x (σq x),
 
-    have H₄ : y ∉ C.Free, { by_contra, apply H₂, right, exact h, },
-    have H₅ : x ∉ C{y // x}.Free, {sorry,},
-    have H₅ := IncLoLang.substitution_rule (ne.symm H₃) H₅ hls, 
+--     have H₄ : y ∉ C.Free, { by_contra, apply H₂, right, exact h, },
+--     have H₅ : x ∉ C{y // x}.Free, {sorry,},
+--     have H₅ := IncLoLang.substitution_rule (ne.symm H₃) H₅ hls, 
 
-    have H: C{y//x}{x//y} = C, {sorry,}, -- Use y ∉ C.Free
+--     have H: C{y//x}{x//y} = C, {sorry,}, -- Use y ∉ C.Free
 
-    rw H at H₅,
+--     rw H at H₅,
 
-  }
-end
+--   }
+-- end
 
 lemma substitution_1 {P C Q ty} {e: IncLoLang.state → ℕ} {x: string} 
+  (H₁: [* P *]C[* Q *]ty) (H₂: (IncLoLang.expression.Free e ∪ {x}) ∩ IncLoLang.stmt.Free C = ∅): 
+  [* λ σ, P (σ{x ↦ e σ}) *] C [* λ σ, Q (σ{x ↦ e σ}) *]ty := 
+begin
+  intros σ' hσ',
+  specialize H₁ (σ'{x ↦ e σ'}) hσ',
+  rcases H₁ with ⟨ σ, ⟨ hpσ, hls⟩ ⟩ ,
+  use σ{x ↦ σ' x}, 
+  have HxFree : x ∉ C.Free, {  
+    by_contra, 
+    apply set.eq_empty_iff_forall_not_mem.mp H₂ x,
+    split,
+    right,
+    exact set.mem_singleton x,
+    exact h
+  },
+  split,
+  {
+    simp,
+    have H: e (σ{x ↦ σ' x}) = σ x, {
+      rw IncLoLang.stmt_free_unchanged (⟨ hls, HxFree⟩ ),
+      rw IncLoLang.state.update_apply,
+      apply IncLoLang.for_all_free_expression,
+      intros y hy,
+      by_cases hxy: x = y,
+      {
+        cases hxy,
+        rw IncLoLang.state.update_apply,
+      },
+      {
+        have Hy: y ∉ C.Free, {
+          by_contra,
+          -- have H: y ∈ (IncLoLang.expression.Free e ∪ {x}) ∩ C.Free, {sorry,},
+          apply set.eq_empty_iff_forall_not_mem.mp H₂ y,
+          split,
+          left,
+          exact hy,
+          exact h,
+        },
+        rw IncLoLang.state.update_apply_ne _ _ _ _ (ne.symm hxy),
+        have H: IncLoLang.lang_semantics C ty σ (σ'{x ↦ e σ'}) ∧ x ∉ C.Free, { exact ⟨hls, HxFree⟩ },
+
+        rw IncLoLang.stmt_free_unchanged (⟨hls, Hy⟩),
+        rw IncLoLang.state.update_apply_ne _ _ _ _ (ne.symm hxy),
+      }
+    },
+    rw H,
+    rw IncLoLang.state.update_id,
+    exact hpσ,
+  },
+  {
+    have H := IncLoLang.free_language_semantics _ _ HxFree _ _ _ (σ' x) hls,
+    rw IncLoLang.state.update_override at H,
+    rw IncLoLang.state.update_id at H,
+    exact H,
+  },
+end
+
+lemma substitution_2 {P C Q ty} {e: IncLoLang.state → ℕ} {x: string} 
   (H₁: [* P *]C[* Q *]ty) (H₂: (IncLoLang.expression.Free e ∪ {x}) ∩ IncLoLang.stmt.Free C = ∅): 
   [* P[e//x] *] C [* Q[e//x] *]ty := 
 begin
