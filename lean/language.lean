@@ -145,7 +145,7 @@ inductive lang_semantics: IncLoLang.stmt -> LogicType -> IncLoLang.state -> IncL
   lang_semantics (C₁ <+> C₂) ty s₁ s₂
 | star {C s₁ s₂ ty} (i: ℕ) (h: lang_semantics (repeat C i) ty s₁ s₂):
   lang_semantics (C**) ty s₁ s₂
-| local_var {C s₁ s₂ ty x v} (h: lang_semantics C ty s₁ s₂):
+| local_var {C s₁ s₂ ty} (x: string) (v: ℕ) (h: lang_semantics C ty s₁ s₂):
   lang_semantics ([loc x . C]) ty (s₁{x ↦ v}) (s₂{x ↦ v})
 
 /-! # Free-/
@@ -167,6 +167,7 @@ def stmt.Free: stmt → set string
 | (C₁ ;; C₂)                := (stmt.Free C₁) ∪ (stmt.Free C₂)
 | (C₁ <+> C₂)               := (stmt.Free C₁) ∪ (stmt.Free C₂)
 | (C**)                     := stmt.Free C
+-- | [loc z . C]               := (stmt.Free C)
 | [loc z . C]               := (stmt.Free C) \ {z}
 | stmt.error                := {}
 | (stmt.assumes P)          := prop.Free P
@@ -174,8 +175,8 @@ def stmt.Free: stmt → set string
 /-! # Substitute-/
 
 def state.substitute : string → string → state → state
-| x y := λ σ, σ{y ↦ σ x}
--- | x y := λ σ, σ{y ↦ σ x}{x ↦ 0}
+-- | y x := λ σ, σ{y ↦ σ x}
+| y x := λ σ, σ{y ↦ σ x}{x ↦ 0}
 
 notation σ `⟨` vto `//` vfrom `⟩` :=  state.substitute vto vfrom σ
 
@@ -185,16 +186,17 @@ def prop.substitute : string → string → prop → prop
 notation P `[` val `//` name `]` :=  prop.substitute name val P
 
 def expression.substitute : string → string → expression → expression
-| x y e := λ σ, e (σ⟨ y // x ⟩)
+| x y e := λ σ, e (σ⟨ x // y ⟩)
 
 def stmt.substitute : string → string → stmt → stmt
 | x y stmt.skip                 := stmt.skip
 | x y ([z ↣ e₂])                := if x = z then [y ↣ λ σ, ((expression.substitute x y e₂) σ)] else [z ↣ λ σ, ((expression.substitute x y e₂) σ)]  -- PUT X BACK!
-| x y (stmt.non_det_assign s)   := stmt.non_det_assign s
+| x y (stmt.non_det_assign z)   := if x = z then stmt.non_det_assign y else stmt.non_det_assign z
 | x y (C₁ ;; C₂)                := (stmt.substitute x y C₁) ;; (stmt.substitute x y C₂)
 | x y (C₁ <+> C₂)               := (stmt.substitute x y C₁) <+> (stmt.substitute x y C₂)
 | x y (C**)                     := (stmt.substitute x y C)**
 | x y [loc z . C]               := if x = z then [loc x . C] else [loc z . (stmt.substitute x y C)]
+-- | x y [loc z . C]               := if x = z then [loc x . C] else (if y = z then C else [loc z . (stmt.substitute x y C)])
 | x y stmt.error                := stmt.error
 | x y (stmt.assumes P)          := stmt.assumes (P[y//x])
 
@@ -518,7 +520,7 @@ begin
       rw ← state.update,
       rw assign_order_eq,
       rw assign_order_eq,
-      exact lang_semantics.local_var h_h,
+      exact lang_semantics.local_var x v h_h,
     },
     {
       have h₂: x ∉ C.Free, {
@@ -539,7 +541,7 @@ begin
       rw ← state.update,
       rw assign_order (ne.symm H),
       rw assign_order (ne.symm H),
-      exact lang_semantics.local_var (C_ih h_s₁ h_s₂ ty v h_h)
+      exact lang_semantics.local_var _ _ (C_ih h_s₁ h_s₂ ty v h_h)
     },
   },
   case stmt.error {
@@ -605,223 +607,638 @@ begin
   },
 end
 
+lemma free_assign {x e}:  (expression.Free e) ∪ {x} ⊆ (stmt.Free ([x ↣ e])):=
+begin
+  intros y hy,
+  by_cases x = y,
+  {
+    cases h,
+    unfold stmt.Free,
+    left,
+    exact set.mem_singleton x,
+  },
+  {
+    -- rcases hy with ⟨ x, y ⟩, 
+    cases hy,
+    {
+      -- rcases hy with ⟨σ, ⟨v, hσ⟩⟩,
+      rw stmt.Free,
+      right, 
+      exact hy,
+    },
+    {
+      exfalso, cases hy, apply h, refl,
+    }
+  },
+end
 
+lemma assign_case {ty y x z e} {σ σ' : state} (Hyx: y ≠ x) (Hfreey: y ∉ ([z ↣ e].Free)):
+  lang_semantics ([z ↣ e]) ty (σ) (σ') ↔
+    lang_semantics ([z ↣ e]{y // x}) ty (σ⟨ y // x⟩) (σ'⟨ y // x ⟩) :=
+begin
+  have H := (set.compl_subset_compl.mpr free_assign) Hfreey,
+  have H₁ : y ∉ e.Free, { by_contra, finish, },
+  have H₁ := not_free_expression H₁,
+  simp at H₁,
 
--- lemma free_assign {x e}: (stmt.Free ([x ↣ e])) ⊆ (expression.Free e) ∪ {x} :=
--- begin
---   intros y hy,
---   by_cases x = y,
---   {
---     cases h,
---     right,
---     exact set.mem_singleton x,
---   },
---   {
---     left,
---     intros σ v,
---     specialize hy σ (σ{x ↦ e σ}) LogicType.ok v,
---     have H := hy (lang_semantics.assign),
+  have H₂ : y ≠ z, {
+    by_contra,
+    finish,
+  },
 
---     have H2 := assign_semantics H,
---     have H3 : (σ{y ↦ v}{x ↦ e (σ{y ↦ v})}) x = e (σ{y ↦ v}), {
---       exact state.update_apply x (e (σ{y ↦ v})) (σ{y ↦ v}),
---     },
+  split, {
+    sorry,
+    -- intro hls,
+    -- cases hls,
+    -- cases hls,
+    -- rw stmt.substitute,
 
---     rw ← H3,
-  
---     have H4 : σ{x ↦ e σ}{y ↦ v} x = e σ, { finish },
---     rw ← H4,
+    -- by_cases hx: x = z,
+    -- {
+    --   rw if_pos hx,
+    --   cases hx,
+    --   rw ← state.update,
+    --   rw expression.substitute,
+    --   simp,
 
---     exact congr (eq.symm H2.left) rfl,
---   },
--- end
+    --   have H: σ{x ↦ e σ}⟨y//x⟩= σ⟨y//x⟩{y ↦ (λ (σ : state), e (σ⟨x//y⟩)) (σ⟨y//x⟩)}, 
+    --   {
+    --     ext z,
+    --     simp,
 
--- lemma free_assign_2 {x e}: (expression.Free e) \ {x} ⊆ (stmt.Free ([x ↣ e])) :=
--- begin
---   intros y hy,
---   intros σ σ' ty v,
---   cases hy,
+    --     unfold state.update,
+    --     unfold state.substitute,
+    --     by_cases hx: x = z,
+    --     {finish,},
+    --     {
+    --       by_cases hy: y = z,
+    --       {
+    --         cases hy,
+    --         simp,
+    --         finish,
+    --       },
+    --       {
+    --         simp,
+    --         unfold state.update,
+    --         finish,
+    --       },
+    --     }
+    --   },
+      
+    --   rw H,
+    --   exact lang_semantics.assign,
+    -- },
+    -- {
+    --   rw if_neg hx,
+    --   rw ← state.update,
+    --   rw state.substitute,
+    --   simp,
+    --   rw assign_order (ne.symm H₂),
+    --   rw assign_order (ne.symm hx),
+    --   have H: σ{z ↦ e σ} x = σ x, {
+    --     funext, finish,
+    --   },
+    --   rw H,
+    --   rw expression.substitute,
+    --   have H: e σ = (λ (σ : state), e (σ⟨x//y⟩)) (σ{y ↦ σ x}{x ↦ 0}), {
+    --     simp,
+    --     rw state.substitute,
+    --     simp,
+    --     rw assign_order Hyx,
+    --     rw assign_order_eq,
+    --     have H: σ{x ↦ σ{y ↦ σ x}{x ↦ 0} y} = σ, {
+    --       funext, finish,
+    --     },
+    --     rw H,
+    --     exact H₁ σ 0,
+    --   },
+    --   rw H,
+    --   exact lang_semantics.assign,
+    -- },
+  },
+  {
+    intros hls,
+    rw stmt.substitute at hls,
 
---   specialize hy_left σ v,
---   intro h,
---   cases h,
---   rw ← state.update,
---   rw assign_order (ne.symm hy_right),
---   rw hy_left,
---   exact lang_semantics.assign,
--- end
+    by_cases hx: x = z,
+    {
+      cases hx,
+      rw if_pos hx at hls,
+      have Hls2 := (assign_semantics hls).1,
+      have hty := (assign_semantics hls).2,
+      cases hty,
 
--- lemma free_non_det_assign {x}: ∀ n, n ∈ (stmt.Free (stmt.non_det_assign x)) :=
--- begin
---   unfold stmt.Free,
+      have H: σ' = σ{x ↦ e σ}, {
+        funext,
+        rw state.substitute at Hls2,
+        simp at Hls2,
+        by_cases x_1 = y,
+        
+      },
+      rw H,
+      exact lang_semantics.assign,
+    },
+  }
+end
 
---   intro n,
---   by_cases n = x,
---   {
---     cases h,
---     intros σ σ' ty v hls,
---     cases hls,
---     have H: (λ (name' : string), ite (name' = x) hls_v (σ name')){x ↦ v} = σ{x ↦ v}{x ↦ v},
---     {
---       funext,
---       by_cases name' = x,
---       { finish, },
---       { finish, }
---     },
---     rw H,
---     exact lang_semantics.non_det_assign v,
---   },
---   {
---     intros σ σ' ty v hls,
---     cases hls,
---     rw ← state.update,
---     rw assign_order (ne.symm h),
---     exact lang_semantics.non_det_assign hls_v,
---   },
--- end
+lemma substitution_rule {ty C y x} {σ σ' : state} (Hyx: y ≠ x) (Hfreey: y ∉ stmt.Free C):
+  lang_semantics C ty (σ) (σ') → 
+    -- If C can take σ to σ'
+    lang_semantics (C{y // x}) ty (σ⟨ y // x⟩) (σ'⟨ y // x ⟩) :=
+    -- Then C(y/x) can take σ with y set to x's value in σ to σ' with y set to x's value in σ' 
+begin
+  revert ty σ σ',
 
--- lemma substitution_rule {ty C y x} {σ σ' : state} (Hyx: y ≠ x) (Hfreey: y ∈ stmt.Free C):
---   lang_semantics C ty (σ) (σ') -> 
---     -- If C can take σ to σ'
---     lang_semantics (C{y // x}) ty (σ⟨ y // x⟩) (σ'⟨ y // x ⟩) :=
---     -- Then C(y/x) can take σ with y set to x's value in σ to σ' with y set to x's value in σ' 
--- begin
---   revert ty σ σ',
+  induction C with z e z 
+    C₁ C₂ hC₁ hC₂
+    C₁ C₂ hC₁ hC₂
+    C hC
+    z C hC,
+  case stmt.skip {
+    -- Skip case is trivial as σ = σ'
+    intros _ σ _ h,
+    cases h,
+    exact lang_semantics.skip,
+  },
+  case stmt.assign {
+    intros ty σ σ' hls,
+    exact assign_case Hyx Hfreey hls,
+  },
+  case stmt.non_det_assign {
+    intros ty σ σ' hls,
 
---   induction C with z e z,
---   case stmt.skip {
---     -- Skip case is trivial as σ = σ'
---     intros _ σ _ h,
---     cases h,
---     exact lang_semantics.skip,
---   },
---   case stmt.assign {
---     intro s,
---     have H := free_assign Hfreey,
---     intros σ σ' hls,
---     cases hls,
---     cases hls,
---     rw stmt.substitute,
---     cases H,
---     { -- case y ∈ Free e
---       sorry,
---     },
---     { -- case y = z
---       sorry,
---     },
---   },
---   case stmt.non_det_assign {
---     intros ty σ σ' hls,
-
---     by_cases x = z,
---     {
---       cases h,
---       rw stmt.substitute,
---       cases hls,
---       unfold state.substitute,
---       have H: σ{x ↦ σ y}{x ↦ (σ y)} = (λ (name' : string), ite (name' = x) hls_v (σ name')){x ↦ ite (y = x) hls_v (σ y)}, 
---       {
---         funext,
---         by_cases name' = x,
---         { finish, },
---         { finish, },
---       },
---       rw ← H,
---       exact lang_semantics.non_det_assign (σ y),
---     },
-
---     have H: ∃ v, σ'⟨y//x⟩ = σ⟨y//x⟩{z ↦ v},
---     {
---       cases hls,
---       use hls_v,
---       rw state.substitute,
---       simp,
---       rw ← state.update,
---       rw ← state.update at hls,
-
---       by_cases H₂: x = y,
---       {
---         cases H₂,
---         funext,
---         rw if_neg h,
---         rw assign_order h,
---       },
---       {
---         funext,
---         rw if_neg h,
-
---       }
---       -- ow
-
-
---     },
-
---     have H2: ty = LogicType.ok, { cases hls, refl, },
---     rw H2,
-
---     -- | non_det_assign {x s v} :
---     --   lang_semantics (IncLoLang.stmt.non_det_assign x) LogicType.ok s (s{x ↦ v})
-
---     rw stmt.substitute,
---     cases H,
---     rw H_h,
-
---     exact lang_semantics.non_det_assign H_w,
---   },
-
---   sorry,
---   sorry,
---   sorry,
---   sorry,
---   sorry,
---   sorry,
--- end
-
-end IncLoLang
-
-/-
-      intros σ σ' h,
+    by_cases x = z,
+    {
       cases h,
       rw stmt.substitute,
-      by_cases Hx: x = z,
+      cases hls,
+      unfold state.substitute,
+      rw if_pos (rfl),
+      rw ← state.update,
+      rw ← assign_order Hyx,
+      rw if_pos (rfl),
+      simp,
+      rw assign_order Hyx,
+      rw assign_order Hyx,
+      have H: σ{x ↦ 0}{y ↦ hls_v} = σ{x ↦ 0}{y ↦ σ x}{y ↦ hls_v}, { rw assign_order_eq, },
+      rw H,
+      exact lang_semantics.non_det_assign hls_v,
+    },
+    {
+      rw stmt.substitute,
+      cases hls,
+      unfold state.substitute,
+      rw if_neg h,
+      rw ← state.update,
+      rw if_neg h,
+      by_cases H₂: z = y,
       {
-        rw if_pos Hx,
-        rw state.substitute,
-        simp,
-        have H2 := H σ (σ x),
-
-        have h2: σ{z ↦ e σ}⟨y//x⟩ = σ⟨y//x⟩{y ↦ (λ (σ : state), e (σ{y ↦ σ x})) (σ⟨y//x⟩)},
-        {
-          simp,
-          rw ← Hx,
-          unfold state.substitute,
-          rw assign_order_eq,
-
-          funext,
-          rw ← H (σ{x ↦ σ y}) (σ{x ↦ σ y} x),
-          by_cases hx: name' = x,
-          { finish, },
-          { 
-            by_cases hy: name' = y,
-            {
-              rw hy,
-              rw hy at hx,
-              unfold state.update,
-              rw if_neg hx,
-              have H3: y = y, {refl,},
-              rw if_pos H3,
-              rw ← state.update,
-
-              cases h,
-              
-            },
-            {
-
-            }
-          }
-        },
+        cases H₂,
+        rw assign_order_eq,
+        rw assign_order (ne.symm h),
+        have H: σ{x ↦ 0}{y ↦ σ x} = σ{x ↦ 0}{y ↦ σ x}{y ↦ σ x}, { rw assign_order_eq, },
+        nth_rewrite 1 H,
+        exact lang_semantics.non_det_assign (σ x),
+      },
+      {
+        rw assign_order H₂,
+        rw assign_order (ne.symm h),
+        exact lang_semantics.non_det_assign hls_v,
+      }
+    },
+  },
+  case stmt.seq {
+    intros ty σ σ' hls,
+    cases hls,
+    {
+      specialize hC₁ (by {
+        by_contra,
+        apply Hfreey,
+        left,
+        exact h,
+      }) hls_H1,
+      specialize hC₂ (by {
+        by_contra,
+        apply Hfreey,
+        right,
+        exact h,
+      }) hls_H2,
+      rw stmt.substitute,
+      exact lang_semantics.seq_ty hC₁ hC₂,
+    },
+    {
+      specialize hC₁ (by {
+        by_contra,
+        apply Hfreey,
+        left,
+        exact h,
+      }) hls_H1,
+      rw stmt.substitute,
+      exact lang_semantics.seq_er_1 hC₁,
+    }
+  },
+  case stmt.choice {
+    intros ty σ σ' hls,
+    cases hls,
+    {
+      specialize hC₁ (by {
+        by_contra,
+        apply Hfreey,
+        left,
+        exact h,
+      }) hls_h,
+      rw stmt.substitute,
+      exact lang_semantics.choice_left hC₁,
+    },
+    {
+      specialize hC₂ (by {
+        by_contra,
+        apply Hfreey,
+        right,
+        exact h,
+      }) hls_h,
+      rw stmt.substitute,
+      exact lang_semantics.choice_right hC₂,
+    }
+  },
+  case stmt.star {
+    intros ty σ σ' hls,
+    cases hls,
+    rw stmt.substitute,
+    use hls_i,
+    revert ty σ σ' ,
+    induction hls_i,
+    {
+      intros ty σ σ' hls_h,
+      rw repeat at hls_h,
+      cases hls_h,
+      rw repeat,
+      exact lang_semantics.skip,
+    },
+    {
+      intros ty σ σ' hls_h,
+      rw repeat at hls_h,
+      cases hls_h,
+      {
+        specialize hls_i_ih hls_h_H1,
+        rw stmt.Free at Hfreey,
+        specialize hC Hfreey hls_h_H2, 
+        rw repeat,
+        exact lang_semantics.seq_ty hls_i_ih hC,
+      },
+      {
+        specialize hls_i_ih hls_h_H1,
+        rw repeat,
+        exact lang_semantics.seq_er_1 hls_i_ih,
+      },
+    },
+  },
+  {
+    intros ty σ σ' hls,
+    cases hls,
+    rw stmt.substitute,
+    by_cases x = z,
+    {
+      cases h,
+      rw if_pos h,
+      rw stmt.Free at Hfreey,
+      have H : y ∉ C.Free, { finish, },
+      rw ← state.update,
+      rw ← state.update,
+      rw state.substitute,
+      simp,
+      have H₂ := free_language_semantics C y H,
+      rw ← assign_order Hyx,
+      rw ← assign_order Hyx,
+      rw assign_order_eq,
+      rw assign_order_eq,
+      specialize H₂ hls_s₁ hls_s₂ ty hls_v hls_h, 
+      exact lang_semantics.local_var _ _ H₂,
+    },
+    {
+      rw if_neg h,
+      rw stmt.Free at Hfreey,
+      by_cases y = z,
+      {
+        cases h,
         rw ← state.update,
+        rw state.substitute,
+        rw ← state.update,
+        simp,
+        have H1: hls_s₁{y ↦ hls_v} x = hls_s₁ x, { unfold state.update, finish, },
+        have H2: hls_s₂{y ↦ hls_v} x = hls_s₂ x, { unfold state.update, finish, },
+        rw H1, rw H2,
+        sorry,
+         -- [loc z. z = 5]
+         -- [loc z. x = 5](z//x)
+         -- [loc z. z = 5](z//x) !! Need to move to fresh
+        -- exact lang_semantic.local_var y hls_v (hC Hfreey hls_h),
+        -- rw stmt.substitute,
+        -- x ≠ b (σ1, σ2) ∈ ⟦local x . C⟧ and y ∉ Free C ⇒ (σ1(y/b), σ2(y/b)) ∈ ⟦local x . C(y/b)⟧
+        -- ({b = 1}, {b = 2}) ∈ ⟦local y . b = 2⟧ ⇒ ({y = 1}, {y = 2}) ∈ ⟦local y . y = 2⟧
+      },
+      {
+        have H: y ∉ C.Free, { by_contra, finish, },
+        specialize hC H hls_h,
+        rw ← state.update,
+        rw ← state.update,
+        simp,
+        have H1: ∀ σ, ((σ{z ↦ hls_v})⟨y//x⟩) = ((σ⟨y//x⟩){z ↦ hls_v}), {
+          intro σ,
+          rw state.substitute,
+          funext,
+          simp,
+          unfold state.update,
+          by_cases name' = x, { cases h, finish, },
+          by_cases name' = y, { cases h, finish, },
+          by_cases name' = z, { cases h, finish, },
+          finish,
+        },
+        rw (H1 hls_s₁),
+        rw (H1 hls_s₂),
+        exact lang_semantics.local_var _ _ hC,
+      },
+    },
+  },
+  {
+    intros ty σ σ' hls,
+    cases hls,
+    rw stmt.substitute,
+    exact lang_semantics.error,  
+  },
+  {
+    intros ty σ σ' hls,
+    cases hls,
+    rw stmt.substitute,
+    have H: (C[y//x]) (σ⟨y//x⟩), { 
+      unfold prop.substitute,
+      unfold state.substitute,
+      rw assign_order_eq,
+      have H: σ{y ↦ σ x}{x ↦ σ{y ↦ σ x}{x ↦ 0} y} = σ{y ↦ σ x}, {
+        unfold state.update,
+        funext,
+        finish,
+      },
+      rw H,
+      rw stmt.Free at Hfreey,
+      apply (not_free_prop Hfreey σ (σ x)).1,
+      exact hls_h,
+    },
+    exact lang_semantics.assumes_ok H,
+  },
+end
 
-        rw h2,
-        exact lang_semantics.assign,
--/
+lemma substitution_rule_2 {ty C y x} {σ σ' : state} (Hyx: y ≠ x) (Hfreey: y ∉ stmt.Free C):
+  lang_semantics (C{y // x}) ty (σ) (σ') →
+    -- If C can take σ to σ'
+    lang_semantics C ty (σ{x ↦ σ' y}) (σ'{x ↦ σ' y}) :=
+    -- Then C(y/x) can take σ with y set to x's value in σ to σ' with y set to x's value in σ' 
+begin
+  revert ty σ σ',
+
+  induction C with z e z 
+    C₁ C₂ hC₁ hC₂
+    C₁ C₂ hC₁ hC₂
+    C hC
+    z C hC,
+  case stmt.skip {
+    -- Skip case is trivial as σ = σ'
+    intros _ σ _ h,
+    cases h,
+    exact lang_semantics.skip,
+  },
+  case stmt.assign {
+    intros ty σ σ' hls,
+    exact assign_case Hyx Hfreey hls,
+  },
+  case stmt.non_det_assign {
+    intros ty σ σ' hls,
+
+    by_cases x = z,
+    {
+      cases h,
+      rw stmt.substitute,
+      cases hls,
+      unfold state.substitute,
+      rw if_pos (rfl),
+      rw ← state.update,
+      rw ← assign_order Hyx,
+      rw if_pos (rfl),
+      simp,
+      rw assign_order Hyx,
+      rw assign_order Hyx,
+      have H: σ{x ↦ 0}{y ↦ hls_v} = σ{x ↦ 0}{y ↦ σ x}{y ↦ hls_v}, { rw assign_order_eq, },
+      rw H,
+      exact lang_semantics.non_det_assign hls_v,
+    },
+    {
+      rw stmt.substitute,
+      cases hls,
+      unfold state.substitute,
+      rw if_neg h,
+      rw ← state.update,
+      rw if_neg h,
+      by_cases H₂: z = y,
+      {
+        cases H₂,
+        rw assign_order_eq,
+        rw assign_order (ne.symm h),
+        have H: σ{x ↦ 0}{y ↦ σ x} = σ{x ↦ 0}{y ↦ σ x}{y ↦ σ x}, { rw assign_order_eq, },
+        nth_rewrite 1 H,
+        exact lang_semantics.non_det_assign (σ x),
+      },
+      {
+        rw assign_order H₂,
+        rw assign_order (ne.symm h),
+        exact lang_semantics.non_det_assign hls_v,
+      }
+    },
+  },
+  case stmt.seq {
+    intros ty σ σ' hls,
+    cases hls,
+    {
+      specialize hC₁ (by {
+        by_contra,
+        apply Hfreey,
+        left,
+        exact h,
+      }) hls_H1,
+      specialize hC₂ (by {
+        by_contra,
+        apply Hfreey,
+        right,
+        exact h,
+      }) hls_H2,
+      rw stmt.substitute,
+      exact lang_semantics.seq_ty hC₁ hC₂,
+    },
+    {
+      specialize hC₁ (by {
+        by_contra,
+        apply Hfreey,
+        left,
+        exact h,
+      }) hls_H1,
+      rw stmt.substitute,
+      exact lang_semantics.seq_er_1 hC₁,
+    }
+  },
+  case stmt.choice {
+    intros ty σ σ' hls,
+    cases hls,
+    {
+      specialize hC₁ (by {
+        by_contra,
+        apply Hfreey,
+        left,
+        exact h,
+      }) hls_h,
+      rw stmt.substitute,
+      exact lang_semantics.choice_left hC₁,
+    },
+    {
+      specialize hC₂ (by {
+        by_contra,
+        apply Hfreey,
+        right,
+        exact h,
+      }) hls_h,
+      rw stmt.substitute,
+      exact lang_semantics.choice_right hC₂,
+    }
+  },
+  case stmt.star {
+    intros ty σ σ' hls,
+    cases hls,
+    rw stmt.substitute,
+    use hls_i,
+    revert ty σ σ' ,
+    induction hls_i,
+    {
+      intros ty σ σ' hls_h,
+      rw repeat at hls_h,
+      cases hls_h,
+      rw repeat,
+      exact lang_semantics.skip,
+    },
+    {
+      intros ty σ σ' hls_h,
+      rw repeat at hls_h,
+      cases hls_h,
+      {
+        specialize hls_i_ih hls_h_H1,
+        rw stmt.Free at Hfreey,
+        specialize hC Hfreey hls_h_H2, 
+        rw repeat,
+        exact lang_semantics.seq_ty hls_i_ih hC,
+      },
+      {
+        specialize hls_i_ih hls_h_H1,
+        rw repeat,
+        exact lang_semantics.seq_er_1 hls_i_ih,
+      },
+    },
+  },
+  {
+    intros ty σ σ' hls,
+    cases hls,
+    rw stmt.substitute,
+    by_cases x = z,
+    {
+      cases h,
+      rw if_pos h,
+      rw stmt.Free at Hfreey,
+      have H : y ∉ C.Free, { finish, },
+      rw ← state.update,
+      rw ← state.update,
+      rw state.substitute,
+      simp,
+      have H₂ := free_language_semantics C y H,
+      rw ← assign_order Hyx,
+      rw ← assign_order Hyx,
+      rw assign_order_eq,
+      rw assign_order_eq,
+      specialize H₂ hls_s₁ hls_s₂ ty hls_v hls_h, 
+      exact lang_semantics.local_var _ _ H₂,
+    },
+    {
+      rw if_neg h,
+      rw stmt.Free at Hfreey,
+      by_cases y = z,
+      {
+        cases h,
+        rw ← state.update,
+        rw state.substitute,
+        rw ← state.update,
+        simp,
+        have H1: hls_s₁{y ↦ hls_v} x = hls_s₁ x, { unfold state.update, finish, },
+        have H2: hls_s₂{y ↦ hls_v} x = hls_s₂ x, { unfold state.update, finish, },
+        rw H1, rw H2,
+        sorry,
+         -- [loc z. z = 5]
+         -- [loc z. x = 5](z//x)
+         -- [loc z. z = 5](z//x) !! Need to move to fresh
+        -- exact lang_semantic.local_var y hls_v (hC Hfreey hls_h),
+        -- rw stmt.substitute,
+        -- x ≠ b (σ1, σ2) ∈ ⟦local x . C⟧ and y ∉ Free C ⇒ (σ1(y/b), σ2(y/b)) ∈ ⟦local x . C(y/b)⟧
+        -- ({b = 1}, {b = 2}) ∈ ⟦local y . b = 2⟧ ⇒ ({y = 1}, {y = 2}) ∈ ⟦local y . y = 2⟧
+      },
+      {
+        have H: y ∉ C.Free, { by_contra, finish, },
+        specialize hC H hls_h,
+        rw ← state.update,
+        rw ← state.update,
+        simp,
+        have H1: ∀ σ, ((σ{z ↦ hls_v})⟨y//x⟩) = ((σ⟨y//x⟩){z ↦ hls_v}), {
+          intro σ,
+          rw state.substitute,
+          funext,
+          simp,
+          unfold state.update,
+          by_cases name' = x, { cases h, finish, },
+          by_cases name' = y, { cases h, finish, },
+          by_cases name' = z, { cases h, finish, },
+          finish,
+        },
+        rw (H1 hls_s₁),
+        rw (H1 hls_s₂),
+        exact lang_semantics.local_var _ _ hC,
+      },
+    },
+  },
+  {
+    intros ty σ σ' hls,
+    cases hls,
+    rw stmt.substitute,
+    exact lang_semantics.error,  
+  },
+  {
+    intros ty σ σ' hls,
+    cases hls,
+    rw stmt.substitute,
+    have H: (C[y//x]) (σ⟨y//x⟩), { 
+      unfold prop.substitute,
+      unfold state.substitute,
+      rw assign_order_eq,
+      have H: σ{y ↦ σ x}{x ↦ σ{y ↦ σ x}{x ↦ 0} y} = σ{y ↦ σ x}, {
+        unfold state.update,
+        funext,
+        finish,
+      },
+      rw H,
+      rw stmt.Free at Hfreey,
+      apply (not_free_prop Hfreey σ (σ x)).1,
+      exact hls_h,
+    },
+    exact lang_semantics.assumes_ok H,
+  },
+end
+
+lemma substitution_free {x y : string} {C: stmt}:
+  (x ∈ C.Free) → (y ∉ C.Free) → (y ∈ ((C{y // x}).Free)) :=
+begin
+  sorry,
+end
+
+end IncLoLang

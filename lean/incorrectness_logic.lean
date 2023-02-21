@@ -681,44 +681,68 @@ begin
 end
 
 lemma local_variable {P C Q ty} {y x: string} 
-  (H₁: [* P *] C{(λ σ, σ y)//x} [* Q *]ty) 
-  -- Seems to be another encoding mistake? Needs to be in Free P and Free C!
-  (H₂: y ∈ (IncLoLang.prop.Free P ∩ IncLoLang.stmt.Free C)): 
-  [* P *] [loc x . C ] [* λ σ, ∃ v_y: ℕ, Q (σ{y ↦ v_y}) *]ty :=
+  (H₁: [* P *] C{y//x} [* Q *]ty) 
+  (H₂: y ∉ (IncLoLang.prop.Free P ∪ IncLoLang.stmt.Free C))
+  (H₃: y ≠ x): 
+    [* P *] [loc x . C ] [* λ σ, ∃ v_y: ℕ, Q (σ{y ↦ v_y}) *]ty :=
 begin
   -- Following proof in the paper
   -- Suppose [p]C(y/x)[ε:q] and (σq | x → v,y → vy) ∈ ∃y.q.
-  intros σq hσq,
-  -- (vy = σ y)
+  intros σq Hσq,
+  -- (vy = σq y)
+  -- (v = σq x)
   -- Then (σq |x→v,y→v2) ∈ q for some v2
-  cases hσq with v₂,
+  cases Hσq with v₂,
 
   -- We execute C(y/x) backwards and get (σp | x → v, y → v1) ∈ p by the Characterization Lemma.
-  specialize H₁ (σq{y ↦ v₂}) hσq_h,
+  specialize H₁ (σq{y ↦ v₂}) Hσq_h,
   rcases H₁ with ⟨ σp, ⟨ hσp, hls ⟩ ⟩,
+  -- v1 = σp y 
+  have Hxpq : σp x = σq x, { sorry, }, -- Prove x is the same as y doesnt touch x
 
   -- Since p is independent of y we can set y back to vy and it will still be in p: (σp | x → v,y → vy) ∈ p.
   have hσq' : P (σp{y ↦ σq y}), {
-    have hyFree: y ∈ IncLoLang.prop.Free P, {exact H₂.left,}, 
+    have hyFree: y ∉ IncLoLang.prop.Free P, {by_contra, apply H₂, left, exact h,}, 
+    have hyFree := IncLoLang.not_free_prop hyFree,
     exact (hyFree σp (σq y)).mp hσp,
   },
 
+  have hyFreeC: y ∉ IncLoLang.stmt.Free C, {by_contra, apply H₂, right, exact h,}, 
+  have hyFreeC := IncLoLang.free_language_semantics C y hyFreeC, 
   -- This sequence of steps can be mimicked in the semantics of local x.C, 
   -- stepping from (σq | x → v,y → vy) via backwards finalization to (σq |x → v,y → vy),
-  use σp{y ↦ σq y},
+  use (σp{y ↦ σq y}),
   -- then backwards via C to (σp |x → v, y → vy), and then via backwards initialization to (σp |x → v,y → vy)
   split,
   {
     exact hσq',
   },
   {
-    
+    -- have H: σp{y ↦ σq y} = σp{y ↦ σq y}{x ↦ 0}, {sorry,},
+    -- rw H,
+    -- have H: σq = σq{x ↦ 0}, {sorry,},
+    -- rw H,
+    rw ← IncLoLang.update_id x σp,
+    rw IncLoLang.update_swap _ _ _ _ _ H₃,
+    nth_rewrite 1 ← IncLoLang.update_id x σq,
+    rw Hxpq,
+
+    apply IncLoLang.lang_semantics.local_var x (σq x),
+
+    have H₄ : y ∉ C.Free, { by_contra, apply H₂, right, exact h, },
+    have H₅ : x ∉ C{y // x}.Free, {sorry,},
+    have H₅ := IncLoLang.substitution_rule (ne.symm H₃) H₅ hls, 
+
+    have H: C{y//x}{x//y} = C, {sorry,}, -- Use y ∉ C.Free
+
+    rw H at H₅,
+
   }
 end
 
 lemma substitution_1 {P C Q ty} {e: IncLoLang.state → ℕ} {x: string} 
   (H₁: [* P *]C[* Q *]ty) (H₂: (IncLoLang.expression.Free e ∪ {x}) ∩ IncLoLang.stmt.Free C = ∅): 
-  [* P[e//x] *] C{e//x} [* Q[e//x] *]ty := 
+  [* P[e//x] *] C [* Q[e//x] *]ty := 
 begin
   intros σ' hσ',
   unfold IncLoLang.prop.substitute at hσ',
