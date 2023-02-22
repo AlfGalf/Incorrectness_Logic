@@ -266,26 +266,6 @@ begin
   { exact h_H1, },
 end
 
-lemma assign_order {σ x y v₁ v₂} (Hxy: x ≠ y) :
-  σ{x ↦ v₁}{y ↦ v₂} = σ{y ↦ v₂}{x ↦ v₁} :=
-begin
-  apply funext,
-  intro z,
-  by_cases h₁ : z = x,
-  { finish, },
-  by_cases h₂ : z = y,
-  repeat{ finish, },
-end
-
-lemma assign_order_eq {σ x v₁ v₂}:
-  σ{x ↦ v₁}{x ↦ v₂} = σ{x ↦ v₂} :=
-begin
-  apply funext,
-  intro z,
-  by_cases h₁ : z = x,
-  repeat { finish, },
-end
-
 /-! ## Free lemmas -/
 
 lemma mod_sub_free (C: stmt):
@@ -394,7 +374,7 @@ begin
     },
     {
       rw ← state.update,
-      rw assign_order (ne.symm h),
+      rw state.update_swap _ _ _ _ _ (h),
       -- have H: (λ (name' : string), σ name') = σ, {exact rfl}
       rw stmt.Free at h₁,
       have H: e σ = e (σ{x ↦ v}), {
@@ -423,7 +403,7 @@ begin
     },
     {
       rw ← state.update,
-      rw assign_order (ne.symm h),
+      rw state.update_swap _ _ _ _ _ h,
       -- have H: (λ (name' : string), σ name') = σ, {exact rfl}
       rw stmt.Free at h₁,
 
@@ -592,13 +572,14 @@ begin
     by_contra,
     cases h,
     cases hy_h with v,
-    rw assign_order_eq at hy_h_h,
+    rw state.update_override at hy_h_h,
     finish,
   },
   {
     cases hy_h with n hn,
     use n,
-    rw assign_order Hxy,
+    -- rw assign_order Hxy,
+    rw state.update_swap _ _ _ _ _ (ne.symm Hxy),
     exact hn,
   },
   {
@@ -691,8 +672,8 @@ begin
     rw ← state.update,
     rw state.substitute,
     simp,
-    rw assign_order (ne.symm H₂),
-    rw assign_order (ne.symm hx),
+    rw state.update_swap _ _ _ _ _ H₂,
+    rw state.update_swap _ _ _ _ _ hx,
     have H: σ{z ↦ e σ} x = σ x, {
       funext, finish,
     },
@@ -702,8 +683,8 @@ begin
       simp,
       rw state.substitute,
       simp,
-      rw assign_order Hyx,
-      rw assign_order_eq,
+      rw ← state.update_swap _ _ _ _ _ Hyx,
+      rw state.update_override,
       have H: σ{x ↦ σ{y ↦ σ x}{x ↦ 0} y} = σ, {
         funext, finish,
       },
@@ -749,12 +730,12 @@ begin
       unfold state.substitute,
       rw if_pos (rfl),
       rw ← state.update,
-      rw ← assign_order Hyx,
+      rw state.update_swap _ _ _ _ _ Hyx,
       rw if_pos (rfl),
       simp,
-      rw assign_order Hyx,
-      rw assign_order Hyx,
-      have H: σ{x ↦ 0}{y ↦ hls_v} = σ{x ↦ 0}{y ↦ σ x}{y ↦ hls_v}, { rw assign_order_eq, },
+      rw ← state.update_swap _ _ _ _ _ Hyx,
+      rw ← state.update_swap _ _ _ _ _ Hyx,
+      have H: σ{x ↦ 0}{y ↦ hls_v} = σ{x ↦ 0}{y ↦ σ x}{y ↦ hls_v}, { rw state.update_override, },
       rw H,
       exact lang_semantics.non_det_assign hls_v,
     },
@@ -768,15 +749,15 @@ begin
       by_cases H₂: z = y,
       {
         cases H₂,
-        rw assign_order_eq,
-        rw assign_order (ne.symm h),
-        have H: σ{x ↦ 0}{y ↦ σ x} = σ{x ↦ 0}{y ↦ σ x}{y ↦ σ x}, { rw assign_order_eq, },
+        rw state.update_override,
+        rw state.update_swap _ _ _ _ _ h,
+        have H: σ{x ↦ 0}{y ↦ σ x} = σ{x ↦ 0}{y ↦ σ x}{y ↦ σ x}, { rw state.update_override, },
         nth_rewrite 1 H,
         exact lang_semantics.non_det_assign (σ x),
       },
       {
-        rw assign_order H₂,
-        rw assign_order (ne.symm h),
+        rw state.update_swap _ _ _ _ _ (ne.symm H₂),
+        rw state.update_swap _ _ _ _ _ h,
         exact lang_semantics.non_det_assign hls_v,
       }
     },
@@ -947,7 +928,7 @@ begin
     have H: (C[y//x]) (σ⟨y//x⟩), { 
       unfold prop.substitute,
       unfold state.substitute,
-      rw assign_order_eq,
+      rw state.update_override,
       have H: σ{y ↦ σ x}{x ↦ σ{y ↦ σ x}{x ↦ 0} y} = σ{y ↦ σ x}, {
         unfold state.update,
         funext,
@@ -1004,9 +985,7 @@ begin
       rw hC₁,
       exact hC₂,
     },
-    {
-      exact hC₁ (⟨hls_H1, H₁⟩),
-    },
+    { exact hC₁ (⟨hls_H1, H₁⟩), },
   },
   case stmt.choice {
     rintros σ σ' ty ⟨ hls, hxFree ⟩,

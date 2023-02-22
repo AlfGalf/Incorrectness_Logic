@@ -772,7 +772,6 @@ begin
       {
         have Hy: y ∉ C.Free, {
           by_contra,
-          -- have H: y ∈ (IncLoLang.expression.Free e ∪ {x}) ∩ C.Free, {sorry,},
           apply set.eq_empty_iff_forall_not_mem.mp H₂ y,
           split,
           left,
