@@ -154,11 +154,66 @@ inductive lang_semantics: IncLoLang.stmt -> LogicType -> IncLoLang.state -> IncL
 def prop.Free (P: prop): set string :=
   λ x, ∃ σ v, (P σ ∧ ¬(P (σ{x ↦ v})))
 
--- def stmt.Free (C: stmt): set string := // old definition
---   λ x, ∀ σ σ' ty v, lang_semantics C ty σ σ' → lang_semantics C ty (σ{x ↦ v}) (σ'{x ↦ v})
+-- def expression.Free (e: expression): set string := 
+--   λ x, ∃ σ v, e σ ≠ e (σ{x ↦ v})
+
+-- Set of variables x such that if ∀ x, σ x = σ' x, then e σ = e σ' 
+def expression.FreeProp (e: expression): set string → Prop := 
+  (λ F, ∀ σ σ': state, (∀ f: F, σ f = σ' f) → e σ = e σ' )
 
 def expression.Free (e: expression): set string := 
-  λ x, ∃ σ v, e σ ≠ e (σ{x ↦ v})
+  λ x, ∀ F: set string, expression.FreeProp e F → x ∈ F 
+
+lemma expression.Free.semantics (e: expression) {x: string}: 
+  x ∈ expression.Free e ↔ ∃ σ v, e σ ≠ e (σ{x ↦ v}) := 
+  -- λ x, ∃ σ v, e σ ≠ e (σ{x ↦ v})
+begin
+  split,
+  {
+    intro hx,
+    by_contra,
+    push_neg at h,
+    specialize hx (λ y : string, y ≠ x),
+    have H: e.FreeProp (λ (y : string), y ≠ x), {
+      intros σ σ' hf,
+      have H: ∃ v, σ' = σ{x ↦ v}, {
+        use σ' x,
+        funext z,
+        by_cases z = x,
+        { cases h, rw state.update_apply, },
+        { 
+          rw state.update_apply_ne _ _ _ _ h, 
+          simp at hf,
+          specialize hf z h,
+          rw hf,
+        },
+      },
+      cases H,
+      rw h σ H_w,
+      rw H_h,
+    },
+    specialize hx H,
+    apply hx,
+    refl,
+  },
+  {
+    intros h F hF,
+    rw expression.FreeProp at hF,
+    cases h with σ h,
+    cases h with v,
+    by_contra,
+    specialize hF σ (σ{x ↦ v}), 
+    simp at hF,
+    have H: (∀ (y : string), y ∈ F → σ y = σ{x ↦ v} y), {
+      intros y hy,
+      have H: y ≠ x, {finish,},
+      rw state.update_apply_ne _ _ _ _ H,
+    },
+    specialize hF H,
+    apply h_h,
+    exact hF,
+  }
+end
 
 def stmt.Free: stmt → set string 
 | stmt.skip                 := {}
@@ -318,10 +373,12 @@ end
 lemma not_free_expression {e: expression} {x}: 
   (¬e.Free x) → ∀ σ v, e σ = e (σ{x ↦ v}) :=
 begin
-  intro h,
-  unfold expression.Free at h,
-  push_neg at h,
-  exact h,
+  intro hFree,
+  by_contra H,
+  apply hFree,
+  apply (expression.Free.semantics e).2, 
+  push_neg at H,
+  exact H,
 end
 
 lemma not_free_prop {e: prop} {x}: 
@@ -380,6 +437,7 @@ begin
       have H: e σ = e (σ{x ↦ v}), {
         by_contra,
         have H2: x ∈ e.Free, {
+          rw expression.Free.semantics e,
           use σ,
           use v,
         },
@@ -620,7 +678,6 @@ begin
   have H := (set.compl_subset_compl.mpr free_assign) Hfreey,
   have H₁ : y ∉ e.Free, { by_contra, finish, },
   have H₁ := not_free_expression H₁,
-  simp at H₁,
 
   have H₂ : y ≠ z, {
     by_contra,
@@ -1041,11 +1098,13 @@ begin
   },
 end
 
-lemma for_all_free_expression {e: expression} {σ σ': state } (H: ∀ x ∈ e.Free, σ x = σ' x): e σ = e σ' :=
+lemma for_all_free_expression {e: expression} {σ σ': state } 
+  (H: ∀ x ∈ e.Free, σ x = σ' x): e σ = e σ' :=
 begin 
-  -- Help??
-  sorry,
-  -- trivial,
+  -- if e σ ≠ e σ'
+  -- then must show ∃ x ∈ e.Free st σ x ≠ σ' x 
+  -- by_contra,
+  finish,
 end
 
 end IncLoLang
