@@ -163,6 +163,15 @@ def expression.FreeProp (e: expression): set string → Prop :=
 
 def expression.Free (e: expression): set string := 
   λ x, ∀ F: set string, expression.FreeProp e F → x ∈ F 
+-- WTS expression.free satisfies expression.FreeProp
+-- Freeprop is closed under intersection
+
+-- freeprop {x, y} freeprop {x, z} → freeprop {x}
+-- show binary intersections
+-- show infinite intersections
+-- thus we have what we want
+
+-- infinite intersections in lean?
 
 lemma expression.Free.semantics (e: expression) {x: string}: 
   x ∈ expression.Free e ↔ ∃ σ v, e σ ≠ e (σ{x ↦ v}) := 
@@ -236,7 +245,7 @@ def state.substitute : string → string → state → state
 notation σ `⟨` vto `//` vfrom `⟩` :=  state.substitute vto vfrom σ
 
 def prop.substitute : string → string → prop → prop
-| x s P := λ σ, P (σ{x ↦ σ s})
+| x s P := λ σ, P (σ⟨ x // s⟩)
 
 notation P `[` val `//` name `]` :=  prop.substitute name val P
 
@@ -993,7 +1002,8 @@ begin
       },
       rw H,
       rw stmt.Free at Hfreey,
-      apply (not_free_prop Hfreey σ (σ x)).1,
+      simp,
+      apply (not_free_prop Hfreey σ (0)).1,
       exact hls_h,
     },
     exact lang_semantics.assumes_ok H,
@@ -1098,12 +1108,148 @@ begin
   },
 end
 
+lemma expression.substitute.x_free {x y} (e: expression) (H: x ≠ y) : 
+  x ∉ (expression.substitute x y e).Free :=
+begin
+  -- unfold expression.Free,
+  by_contra,
+  have H := (expression.Free.semantics (expression.substitute x y e)).1 h,
+  cases H with σ h,
+  rcases h with ⟨v, h⟩,
+  unfold expression.substitute at h,
+  unfold state.substitute at h,
+  simp[H, (ne.symm H)] at h,
+  exact h,
+end
+
+lemma prop.substitute.x_free {x y} (P: prop) (H: x ≠ y) : 
+  x ∉ (prop.substitute x y P).Free :=
+begin
+  unfold prop.Free,
+  by_contra,
+  cases h with σ h,
+  rcases h with ⟨v, ⟨hp, hnp⟩⟩,
+  unfold prop.substitute at hp,
+  unfold prop.substitute at hnp,
+  unfold state.substitute at hp,
+  unfold state.substitute at hnp,
+  simp[ne.symm H] at hnp,
+  simp[ne.symm H] at hp,
+  exact H (false.rec (x = y) (hnp hp)),
+end
+
+lemma stmt.substitution.x_free {x y C} (H: x ≠ y): x ∉ (C{y // x}).Free :=
+begin
+  -- sorry,
+  induction C with 
+    z e 
+    z
+    C₁ C₂ hC₁ hC₂
+    C₁ C₂ hC₁ hC₂
+    C hC
+    ,
+  case stmt.skip {
+    rw stmt.substitute,
+    rw stmt.Free,
+    exact set.not_mem_empty x,
+  },
+  case stmt.assign {
+    rw stmt.substitute,
+    by_cases hxz: x = z,
+    {
+      cases hxz,
+      simp,
+      rw stmt.Free,
+      by_contra,
+      simp[H] at h,
+
+      exact expression.substitute.x_free e H h,
+    },
+    {
+      simp[hxz],
+      rw stmt.Free,
+      by_contra,
+      simp[hxz] at h,
+
+      exact expression.substitute.x_free e H h,
+    },
+  },
+  case stmt.non_det_assign {
+    rw stmt.substitute,
+    by_cases hxz: x = z,
+    {
+      cases hxz,
+      simp,
+      rw stmt.Free,
+      exact H,
+    },
+    {
+      simp [hxz],
+      rw stmt.Free,
+      exact hxz,
+    },
+  },
+  case stmt.seq {
+    rw stmt.substitute,
+    rw stmt.Free,
+    by_contra,
+    cases h,
+    { exact hC₁ h, },
+    { exact hC₂ h, },
+  },
+  case stmt.choice {
+    rw stmt.substitute,
+    rw stmt.Free,
+    by_contra,
+    cases h,
+    { exact hC₁ h, },
+    { exact hC₂ h, },
+  },
+  case stmt.star {
+    rw stmt.substitute,
+    rw stmt.Free,
+    exact hC,
+  },
+  case stmt.error {
+    rw stmt.substitute,
+    rw stmt.Free,
+    exact set.not_mem_empty x,
+  },
+  case stmt.assumes {
+    rw stmt.substitute,
+    rw stmt.Free,
+    exact prop.substitute.x_free C H,
+  },
+end
+
+-- lemma expression.FreeProp.intersection {e: expression} {s} {A B: set string} [decidable (s ∈ A)] : 
+--   e.FreeProp A ∧ e.FreeProp B → e.FreeProp (A ∩ B) := 
+-- begin
+--   rintro ⟨ hA, hB ⟩,
+--   unfold expression.FreeProp,
+--   intros σ₁ σ₃ h,  
+--   have σ₂: state := λ s, if s ∈ A then σ₁ s else σ₃ s,
+
+--   specialize hA σ₁ σ₂,
+--   specialize hB σ₂ σ₃,
+-- end
+
 lemma for_all_free_expression {e: expression} {σ σ': state } 
   (H: ∀ x ∈ e.Free, σ x = σ' x): e σ = e σ' :=
 begin 
   -- if e σ ≠ e σ'
   -- then must show ∃ x ∈ e.Free st σ x ≠ σ' x 
   -- by_contra,
+  -- WTS expression.free satisfies expression.FreeProp
+  -- Freeprop is closed under intersection
+
+  -- freeprop {x, y} freeprop {x, z} → freeprop {x}
+  -- show binary intersections
+  -- show infinite intersections
+  -- thus we have what we want
+  -- infinite intersections in lean?
+
+
   finish,
 end
 

@@ -797,18 +797,73 @@ begin
   },
 end
 
-lemma substitution_2 {P C Q ty} {e: IncLoLang.state → ℕ} {x: string} 
-  (H₁: [* P *]C[* Q *]ty) (H₂: (IncLoLang.expression.Free e ∪ {x}) ∩ IncLoLang.stmt.Free C = ∅): 
-  [* P[e//x] *] C [* Q[e//x] *]ty := 
+lemma substitution_2 {P Q: IncLoLang.prop} {C ty} {x y: string} 
+  (H₁: [* P *]C[* Q *]ty) (H₂: y ∉ C.Free ∪ P.Free ∪ Q.Free) (H₃: x ≠ y): 
+  [* P[y//x] *] C{y // x} [* Q[y//x] *]ty := 
 begin
   intros σ' hσ',
   unfold IncLoLang.prop.substitute at hσ',
-  specialize H₁ (σ'{x ↦ e σ'}) hσ', 
+  specialize H₁ (σ'⟨x//y⟩) hσ', 
+
   rcases H₁ with ⟨ σ, ⟨ hpσ, hC ⟩⟩,
-  use σ, -- WRONG
+
+  use σ⟨ y // x ⟩{x ↦ σ' x}, 
+
   split,
-  sorry,
-  sorry,
+  {
+    unfold IncLoLang.prop.substitute,
+    unfold IncLoLang.state.substitute,
+    simp,
+    rw IncLoLang.state.update_swap _ _ _ _ _ H₃,
+    -- rw IncLoLang.state.update_swap _ _ _ _ _ H₃,
+    simp,
+    have H: y ∉ P.Free, {
+      by_contra,
+      apply H₂,
+      left, right,
+      exact h,
+    },
+    simp[(ne.symm H₃)],
+    exact (IncLoLang.not_free_prop H σ (0)).1 hpσ,
+  },
+  {
+    have H: y ∉ C.Free, {
+      by_contra,
+      apply H₂,
+      left, left,
+      exact h,
+    },
+
+    have H := IncLoLang.substitution_rule (ne.symm H₃) H hC,
+
+    have Ht: σ'⟨x//y⟩⟨y//x⟩ = σ'{x ↦ 0}, { 
+      funext z,
+      by_cases hzx: z = x,
+      {
+        cases hzx,
+        unfold IncLoLang.state.substitute,
+        simp[H₃],
+      },
+      {
+        by_cases hyz: z = y,
+        {
+          cases hyz,
+          unfold IncLoLang.state.substitute,
+          simp[hzx],
+        },
+        {
+          unfold IncLoLang.state.substitute,
+          simp[hzx, hyz],
+        },
+      }
+    },
+    rw Ht at H,
+
+    have HxFree: x ∉ (C{y//x}).Free, {exact IncLoLang.stmt.substitution.x_free H₃,},
+    have HLS := IncLoLang.free_language_semantics (C{y //x}) x HxFree (σ⟨y//x⟩) (σ'{x ↦ 0}) ty (σ' x) H,
+    simp at HLS,
+    exact HLS,
+  },
 end
 
 
@@ -819,8 +874,8 @@ end
 - [x] Constancy
 - [x] Local variable encoding
 - [ ] Local variable rule
-- [ ] Substitution 1
-- [ ] Substitution 2
+- [x?] Substitution 1
+- [x] Substitution 2
 - [x] Backwards varient
 
 -/
