@@ -1,6 +1,7 @@
 import algebra
 import data.real.basic
 import data.vector
+import data.finset
 import tactic.explode
 import tactic.find
 import tactic.induction
@@ -162,7 +163,7 @@ def expression.FreeProp (e: expression): set string → Prop :=
   (λ F, ∀ σ σ': state, (∀ f: F, σ f = σ' f) → e σ = e σ' )
 
 def expression.Free (e: expression): set string := 
-  λ x, ∀ F: set string, expression.FreeProp e F → x ∈ F 
+  ⋂₀ (λ A, e.FreeProp A) 
 -- WTS expression.free satisfies expression.FreeProp
 -- Freeprop is closed under intersection
 
@@ -1222,26 +1223,143 @@ begin
   },
 end
 
--- lemma expression.FreeProp.intersection {e: expression} {s} {A B: set string} [decidable (s ∈ A)] : 
---   e.FreeProp A ∧ e.FreeProp B → e.FreeProp (A ∩ B) := 
--- begin
---   rintro ⟨ hA, hB ⟩,
---   unfold expression.FreeProp,
---   intros σ₁ σ₃ h,  
---   have σ₂: state := λ s, if s ∈ A then σ₁ s else σ₃ s,
+lemma expression.FreeProp.intersection 
+  {e: expression} {A B: set string}: 
+  e.FreeProp A ∧ e.FreeProp B → e.FreeProp (A ∩ B) := 
+begin
+  rintro ⟨ hA, hB ⟩,
+  unfold expression.FreeProp,
+  intros σ₁ σ₃ h,  
+  classical,
+  let σ₂: state := λ s, if s ∈ A then σ₁ s else σ₃ s,
+  have H₁₂: e σ₁ = e σ₂, {
+    specialize hA σ₁ σ₂,
+    apply hA,
+    intro a,
+    simp[σ₂],
+    simp,
+  },
+  have H₂₃: e σ₂ = e σ₃, {
+    specialize hB σ₂ σ₃,
+    apply hB,
+    intro b,
+    simp,
+    intro hb,
+    have H: ↑b ∈ A ∩ B, { finish, },
+    simp at h,
+    exact h b (hb) (subtype.mem b),
+  },
+  rw H₁₂,
+  exact H₂₃,
+end
 
---   specialize hA σ₁ σ₂,
---   specialize hB σ₂ σ₃,
--- end
+-- lemma finite_powerset (B: set string) : B.finite → (𝒫 B).finite := 
+-- begin 
+--   intro h,
+
+--   have hA := set.finite.exists_finset_coe h,
+--   cases hA,
+
+--   have hB := finset.coe_powerset (hA_w),
+--   rw hA_h at hB,
+
+--   let X : finset (set string) := ((hA_h.powerset).map (⟨coe, finset.coe_injective⟩)),
+  
+--   exact set.finite.of_finset (hA_w.powerset) hB,
+-- end 
+
+-- From https://leanprover.zulipchat.com/#narrow/stream/113489-new-members/topic/Arguments.20with.20infinite.20sets.20and.20decidability
+lemma finite_powerset {α} {s : set α} (h : s.finite) : (𝒫 s).finite :=
+begin
+  obtain ⟨s', hs'⟩ := set.finite.exists_finset_coe h,
+  refine set.finite.of_finset (s'.powerset.map (⟨_, finset.coe_injective⟩)) _,
+  simp_rw [←finset.mem_coe, ←set.ext_iff, finset.coe_map, finset.coe_powerset,
+    function.embedding.coe_fn_mk, ←hs', set.image_preimage_eq_iff],
+  intros x hx,
+  rw set.mem_powerset_iff at hx,
+  classical,
+  refine ⟨s'.filter (∈ x), _⟩,
+  rwa [finset.coe_filter, set.sep_mem_eq, set.inter_eq_right_iff_subset],
+end
+
+lemma expression.FreeProp.infIntersection
+  (e: expression): 
+  (∃ B: set string,(e.FreeProp B) ∧ B.finite) → (e.FreeProp e.Free) :=
+begin
+  -- Argument:
+  -- B ∈ A so ⋂₀ A ⊆ B
+  intros h₁,
+  cases h₁ with B h₁,
+
+  -- so ⋂₀ A = ⋂₀ (a ⋂ B, a ∈ A)
+  let AB : set (set string) := (λ (x: set string), (∃ (a: set string), (e.FreeProp a) ∧ x = B ∩ a)),
+  have AB_finite: AB.finite,
+  {
+    let Bp : set (set string) := B.powerset,
+
+    have H1: AB ⊆ Bp, {
+      intros x hx,
+      rcases hx with ⟨ a, ⟨ b, c ⟩ ⟩,
+      rw c,
+      simp,
+    },
+    have H2 := finite_powerset h₁.2,
+    exact set.finite.subset H2 H1,
+  },
+
+  -- but B finite, so this becomes a finite set
+  have H: e.Free = ⋂₀ AB, {
+    have H₁: e.Free ⊆ ⋂₀ AB, {
+      intros a ha t ht, 
+      apply ha,
+      rcases ht with ⟨ s, ⟨ hs, ht⟩⟩,
+      rw ht,
+      exact expression.FreeProp.intersection (⟨ h₁.1, hs ⟩),
+    },
+    have H₂: ⋂₀ AB ⊆ e.Free, {
+      intros a ha t ht, 
+      have H: t ∩ B ∈ AB, {
+        use t,
+        split,
+        { exact ht, },
+        { exact set.inter_comm t B, },
+      },
+      exact set.mem_of_mem_inter_left (ha (t ∩ B) H),
+    },
+    exact subset_antisymm H₁ H₂,
+  },
+  rw H,
+
+  let prop : set (set string) → Prop := λ A, e.FreeProp (⋂₀ A),
+  have H₀: prop ∅, {
+    intros σ σ' h,
+    simp at h,
+    have H: σ = σ', { exact funext h, },
+    rw H,
+  }, 
+  -- So get result by applying above theorem inductively
+  exact set.finite.induction_on' AB_finite (H₀) (by {
+    intros s A hs hA hs' hAi,
+    have H: ⋂₀ insert s A = ⋂₀ A ∩ s, {
+      ext,
+      split,
+      { finish, },
+      { finish, }
+    },
+    rw H,
+    rcases hs with ⟨ t, ⟨ ht, hs ⟩ ⟩,
+    exact expression.FreeProp.intersection (⟨ hAi, 
+      (by { rw hs, exact expression.FreeProp.intersection (⟨h₁.1, ht⟩) }) 
+    ⟩),
+  }),
+end
 
 lemma for_all_free_expression {e: expression} {σ σ': state } 
-  (H: ∀ x ∈ e.Free, σ x = σ' x): e σ = e σ' :=
+  (H: ∀ x ∈ e.Free, σ x = σ' x) (H₂: ∃ A, e.FreeProp A ∧ A.finite): e σ = e σ' :=
 begin 
   -- if e σ ≠ e σ'
   -- then must show ∃ x ∈ e.Free st σ x ≠ σ' x 
-  -- by_contra,
-  -- WTS expression.free satisfies expression.FreeProp
-  -- Freeprop is closed under intersection
+  -- ?
 
   -- freeprop {x, y} freeprop {x, z} → freeprop {x}
   -- show binary intersections
@@ -1249,8 +1367,15 @@ begin
   -- thus we have what we want
   -- infinite intersections in lean?
 
-
-  finish,
+  have H₂: e.FreeProp e.Free, {
+    unfold expression.Free,
+    exact expression.FreeProp.infIntersection e H₂, 
+  },
+  
+  unfold expression.FreeProp at H₂,
+  specialize H₂ σ σ',
+  simp at H₂,
+  exact H₂ H,
 end
 
 end IncLoLang

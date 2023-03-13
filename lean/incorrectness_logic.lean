@@ -740,8 +740,9 @@ end
 --   }
 -- end
 
-lemma substitution_1 {P C Q ty} {e: IncLoLang.state → ℕ} {x: string} 
-  (H₁: [* P *]C[* Q *]ty) (H₂: (IncLoLang.expression.Free e ∪ {x}) ∩ IncLoLang.stmt.Free C = ∅): 
+lemma substitution_1 {P Q ty} {C: IncLoLang.stmt} {e: IncLoLang.expression} {x: string} 
+  (HB: (∃ B: set string, (e.FreeProp B ∧ B.finite)))
+  (H₁: [* P *]C[* Q *]ty) (H₂: (e.Free ∪ {x}) ∩ C.Free = ∅): 
   [* λ σ, P (σ{x ↦ e σ}) *] C [* λ σ, Q (σ{x ↦ e σ}) *]ty := 
 begin
   intros σ' hσ',
@@ -783,7 +784,8 @@ begin
 
         rw IncLoLang.stmt_free_unchanged (⟨hls, Hy⟩),
         rw IncLoLang.state.update_apply_ne _ _ _ _ (ne.symm hxy),
-      }
+      },
+      exact HB,
     },
     rw H,
     rw IncLoLang.state.update_id,
@@ -860,7 +862,7 @@ begin
     rw Ht at H,
 
     have HxFree: x ∉ (C{y//x}).Free, {exact IncLoLang.stmt.substitution.x_free H₃,},
-    have HLS := IncLoLang.free_language_semantics (C{y //x}) x HxFree (σ⟨y//x⟩) (σ'{x ↦ 0}) ty (σ' x) H,
+    have HLS := IncLoLang.free_language_semantics (C{y // x}) x HxFree (σ⟨y//x⟩) (σ'{x ↦ 0}) ty (σ' x) H,
     simp at HLS,
     exact HLS,
   },
@@ -873,9 +875,10 @@ end
 - [x] Nondet Assignment
 - [x] Constancy
 - [x] Local variable encoding
-- [ ] Local variable rule
+- [nope] Local variable rule
 - [x?] Substitution 1
 - [x] Substitution 2
 - [x] Backwards varient
 
+- [ ] Free encodings
 -/
