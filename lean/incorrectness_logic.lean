@@ -14,13 +14,12 @@ import tactic.where
 
 import lean.language
 
-/- Q: What to do about locals? -/
-/- Q: Check def of demantics of C**? -/
+namespace IncLogic
 
+/-! ## Post -/
 /- the def of post from the paper-/
 def post (ty: IncLoLang.LogicType) (r: IncLoLang.stmt) (p: IncLoLang.state -> Prop) : IncLoLang.state -> Prop 
   := λ σ', ∃ σ, p σ ∧ IncLoLang.lang_semantics r ty σ σ'
-
 
 /-! ## Incorrectness logic and Hoare logic encodings -/
 
@@ -113,7 +112,7 @@ end
 lemma disjunction_incorrect {P₁ P₂ Q₁ Q₂ C ty} 
   (h₁ : [* P₁ *] C [* Q₁ *] ty) 
   (h₂ : [* P₂ *] C [* Q₂ *] ty):
-  [* λ st, P₁ st ∨ P₂ st *] C [* λ st, Q₁ st ∨ Q₂ st *] ty :=
+  [* λ σ, P₁ σ ∨ P₂ σ *] C [* λ σ, Q₁ σ ∨ Q₂ σ *] ty :=
 begin
   intros end_state hEnd,
   cases hEnd,
@@ -523,7 +522,6 @@ begin
   },
   case IncLoLang.stmt.non_det_assign {
     intros ty σ σ' H2,
-    -- specialize H1 C,
     unfold IncLoLang.Mod at H1,
     simp at H1,
     unfold has_mem.mem at H1,
@@ -657,7 +655,7 @@ begin
 end
 
 /- Backwards variant -/
-lemma backwards_variant {P: ℕ → IncLoLang.state -> Prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}
+lemma backwards_variant {P: ℕ → IncLoLang.state -> Prop} {C: IncLoLang.stmt}
   (H1: ∀ n, [* P n *]C[* P n.succ *]IncLoLang.LogicType.ok ):
   ∀ n, [* P 0 *]C**[* P n *]IncLoLang.LogicType.ok :=
 begin
@@ -868,6 +866,7 @@ begin
   },
 end
 
+end IncLogic
 
 /-! ### TODO: 
 
@@ -876,7 +875,7 @@ end
 - [x] Constancy
 - [x] Local variable encoding
 - [nope] Local variable rule
-- [x?] Substitution 1
+- [x] Substitution 1
 - [x] Substitution 2
 - [x] Backwards varient
 

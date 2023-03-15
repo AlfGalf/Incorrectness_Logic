@@ -125,11 +125,11 @@ def repeat: IncLoLang.stmt → ℕ → IncLoLang.stmt
 | C nat.zero := IncLoLang.stmt.skip
 | C (nat.succ i) := (repeat C (i)) ;; C
 
-inductive lang_semantics: IncLoLang.stmt -> LogicType -> IncLoLang.state -> IncLoLang.state -> Prop
+inductive lang_semantics: IncLoLang.stmt → LogicType → IncLoLang.state → IncLoLang.state → Prop
 | skip {s} :
   lang_semantics IncLoLang.stmt.skip LogicType.ok s s
 | seq_ty {S T s t u ty} (H1: lang_semantics S LogicType.ok s t) (H2: lang_semantics T ty t u) :
-  lang_semantics(S ;; T) ty s u
+  lang_semantics (S ;; T) ty s u
 | seq_er_1 {S T s t} (H1: lang_semantics S LogicType.er s t): 
   lang_semantics (S ;; T) LogicType.er s t
 | error {s}:
