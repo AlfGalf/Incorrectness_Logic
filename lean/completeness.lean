@@ -96,4 +96,35 @@ begin
   case substitution_2 {exact IncLogic.substitution_2 h_H₁ h_H₂ h_H₃,},
 end
 
+lemma IncorectnessProof.completeness {P Q: IncLoLang.prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}:
+  ([* P *]C[* Q *]ty) → IncorrectnessProof P C Q ty :=
+begin
+  revert P Q ty,
+  induction C,
+  case IncLoLang.stmt.skip {
+    sorry,
+  },
+  case IncLoLang.stmt.assign {
+    sorry,
+  },
+  case IncLoLang.stmt.non_det_assign {
+    sorry,
+  },
+  case IncLoLang.stmt.seq {
+    sorry,
+  },
+  case IncLoLang.stmt.choice {
+    sorry,
+  },
+  case IncLoLang.stmt.star {
+    sorry,
+  },
+  case IncLoLang.stmt.error {
+    sorry,
+  },
+  case IncLoLang.stmt.assumes {
+    sorry,
+  },
+end
+
 end IncorrectnessCompleteness
