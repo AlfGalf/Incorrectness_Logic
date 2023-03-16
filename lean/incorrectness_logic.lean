@@ -297,7 +297,7 @@ end
 
 /- Assignment -/
 lemma assignment_correct {P x e} :
-  [* P *](IncLoLang.stmt.assign x e)[* λ σ', (∃ x', (P{x ↣ x'} σ') ∧ σ' x = (e (σ'{x ↦ x'}))) *] IncLoLang.LogicType.ok :=
+  [* P *]([x ↣ e])[* λ σ', (∃ x', (P{x ↣ x'} σ') ∧ σ' x = (e (σ'{x ↦ x'}))) *] IncLoLang.LogicType.ok :=
 begin
   /- Given there exists a x' st P{x ↦ x'} σ' and σ' = e (σ'{x ↦ x'}) -/
   /- x' is the value of x *before* assignment -/
@@ -377,23 +377,23 @@ end
 
 /- Costancy -/
 /- Consistency for the seq case -/
-lemma helper_consistency_seq (F: IncLoLang.state -> Prop) (leftC rightC: IncLoLang.stmt) (σstart σend: IncLoLang.state)
-  (H1: IncLoLang.Mod (leftC;;rightC) ∩ (IncLoLang.prop.Free F) = ∅)
-  (hLeft: (IncLoLang.Mod leftC ∩ IncLoLang.prop.Free F = ∅) → 
+lemma helper_consistency_seq (F: IncLoLang.prop) (leftC rightC: IncLoLang.stmt) (σstart σend: IncLoLang.state)
+  (H1: (leftC;;rightC).Mod ∩ (F.Free) = ∅)
+  (hLeft: (leftC.Mod ∩ F.Free = ∅) → 
     ∀ (ty : IncLoLang.LogicType) (σ σ' : IncLoLang.state), IncLoLang.lang_semantics leftC ty σ σ' → (F σ ↔ F σ'))
-  (hRight: (IncLoLang.Mod rightC ∩ IncLoLang.prop.Free F = ∅) → 
+  (hRight: (rightC.Mod ∩ F.Free = ∅) → 
     ∀ (ty : IncLoLang.LogicType) (σ σ' : IncLoLang.state), IncLoLang.lang_semantics rightC ty σ σ' → (F σ ↔ F σ')):
   ∀ ty, IncLoLang.lang_semantics (leftC ;; rightC) ty σstart σend → (F σstart ↔ F σend) :=
 begin
     intro ty,
     intro hσ,
-    have freeLeft: (IncLoLang.Mod leftC ∩ IncLoLang.prop.Free F = ∅), {
+    have freeLeft: (leftC.Mod ∩ F.Free = ∅), {
       have hMod := IncLoLang.mod_elem_left_elem_seq leftC rightC,
       have H:=(IncLoLang.prop.Free F).inter_subset_inter_left hMod,
       rw H1 at H,
       exact set.subset_eq_empty H rfl,
     },
-    have freeRight: (IncLoLang.Mod rightC ∩ IncLoLang.prop.Free F = ∅), {
+    have freeRight: (rightC.Mod ∩ F.Free = ∅), {
       have hMod := IncLoLang.mod_elem_right_elem_seq leftC rightC,
       have H:=(IncLoLang.prop.Free F).inter_subset_inter_left hMod,
       rw H1 at H,
@@ -499,8 +499,8 @@ end
 
 -- Want to show, if Mod(C) \ Free(F) = ∅ then constancy
 lemma consistency_helper {C: IncLoLang.stmt} 
-  (F: IncLoLang.state -> Prop) 
-  (H1: IncLoLang.Mod C ∩ IncLoLang.prop.Free F = ∅):
+  (F: IncLoLang.prop) 
+  (H1: C.Mod ∩ F.Free = ∅):
   ∀ ty σ σ', IncLoLang.lang_semantics C ty σ σ' → (F σ ↔ F σ') :=
 begin
   induction C generalizing F,
@@ -512,7 +512,7 @@ begin
   case IncLoLang.stmt.assign {
     intros ty σ σ' H2,
 
-    unfold IncLoLang.Mod at H1,
+    unfold IncLoLang.stmt.Mod at H1,
     simp at H1,
 
     unfold has_mem.mem at H1,
@@ -522,7 +522,7 @@ begin
   },
   case IncLoLang.stmt.non_det_assign {
     intros ty σ σ' H2,
-    unfold IncLoLang.Mod at H1,
+    unfold IncLoLang.stmt.Mod at H1,
     simp at H1,
     unfold has_mem.mem at H1,
     have H1 := IncLoLang.not_free_prop H1,
@@ -555,13 +555,13 @@ begin
     rename C_ih_ᾰ hLeft,
     rename C_ih_ᾰ_1 hRight,
     intros σ σ' ty h,
-    have freeLeft: (IncLoLang.Mod leftC ∩ IncLoLang.prop.Free F = ∅), {
+    have freeLeft: (leftC.Mod ∩ IncLoLang.prop.Free F = ∅), {
       have hMod := IncLoLang.mod_elem_left_elem_choice leftC rightC,
       have H:=(IncLoLang.prop.Free F).inter_subset_inter_left hMod,
       rw H1 at H,
       exact set.subset_eq_empty H rfl,
     },
-    have freeRight: (IncLoLang.Mod rightC ∩ IncLoLang.prop.Free F = ∅), {
+    have freeRight: (rightC.Mod ∩ IncLoLang.prop.Free F = ∅), {
       have hMod := IncLoLang.mod_elem_right_elem_choice leftC rightC,
       have H:=(IncLoLang.prop.Free F).inter_subset_inter_left hMod,
       rw H1 at H,
@@ -579,7 +579,7 @@ begin
     intros startst endst,
     intro h,
 
-    rw IncLoLang.Mod at H1,
+    rw IncLoLang.stmt.Mod at H1,
     specialize C_ih F H1,
 
     exact (star_helper C_ih) ty startst endst h,
@@ -622,8 +622,8 @@ begin
   -- },
 end
 
-lemma constancy {P Q F: IncLoLang.state -> Prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}
-  (H1: IncLoLang.Mod C ∩ IncLoLang.prop.Free F = ∅) (H2: [* P *]C[* Q *]ty ):
+lemma constancy {P Q F: IncLoLang.prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}
+  (H1: C.Mod ∩ F.Free = ∅) (H2: [* P *]C[* Q *]ty ):
   [* λ st, P st ∧ F st *]C[* λ st, Q st ∧ F st *]ty :=
 begin
   rintros σ' ⟨ hσQ, hσF⟩,

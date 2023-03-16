@@ -269,10 +269,10 @@ notation C `{` exp `//` name `}` :=  stmt.substitute name exp C
 
 /-! ## Mod -/
 
-def Mod: stmt -> set string
-| (C₁ ;; C₂) := (Mod C₁) ∪ (Mod C₂)
-| (C₁ <+> C₂) := (Mod C₁) ∪ (Mod C₂)
-| (C**) := (Mod C)
+def stmt.Mod: stmt → set string
+| (C₁ ;; C₂) := (C₁.Mod) ∪ (C₂.Mod)
+| (C₁ <+> C₂) := (C₁.Mod) ∪ (C₂.Mod)
+| (C**) := (C.Mod)
 | ([x ↣ v]) := {x}
 | (IncLoLang.stmt.skip) := {}
 | (IncLoLang.stmt.non_det_assign x) := {x}
@@ -281,34 +281,34 @@ def Mod: stmt -> set string
 -- | (IncLoLang.stmt.local_var x C) := Mod C \ {x}
 
 lemma mod_elem_left_elem_seq (C₁ C₂: stmt):
-   Mod C₁ ⊆ Mod (C₁ ;; C₂):=
+   C₁.Mod ⊆ (C₁ ;; C₂).Mod :=
 begin 
   intro h,
-  rw Mod,
+  rw stmt.Mod,
   finish,
 end
 
 lemma mod_elem_right_elem_seq (C₁ C₂: stmt):
-   Mod C₂ ⊆ Mod (C₁ ;; C₂):=
+   C₂.Mod ⊆ (C₁ ;; C₂).Mod :=
 begin 
   intro h,
-  rw Mod,
+  rw stmt.Mod,
   finish,
 end
 
 lemma mod_elem_left_elem_choice (C₁ C₂: stmt):
-   Mod C₁ ⊆ Mod (C₁ <+> C₂):=
+   C₁.Mod ⊆ (C₁ <+> C₂).Mod :=
 begin 
   intro h,
-  rw Mod,
+  rw stmt.Mod,
   finish,
 end
 
 lemma mod_elem_right_elem_choice (C₁ C₂: stmt):
-   Mod C₂ ⊆ Mod (C₁ <+> C₂):=
+   C₂.Mod ⊆ (C₁ <+> C₂).Mod :=
 begin 
   intro h,
-  rw Mod,
+  rw stmt.Mod,
   finish,
 end
 
@@ -334,34 +334,34 @@ end
 /-! ## Free lemmas -/
 
 lemma mod_sub_free (C: stmt):
-  Mod C ⊆ C.Free :=
+  C.Mod ⊆ C.Free :=
 begin
   induction C with v r _ C₁ C₂ hC₁ hC₂ C₁ C₂ hC₁ hC₂ _ h,
   case stmt.skip {
-    rw Mod,
+    rw stmt.Mod,
     exact stmt.skip.Free.empty_subset,
   },
   case stmt.assign {
-    rw Mod,
+    rw stmt.Mod,
     rw stmt.Free,
     exact ({v}: set string).subset_union_left (expression.Free r),
   },
   case stmt.non_det_assign {
-    rw Mod,
+    rw stmt.Mod,
     rw stmt.Free,
   },
   case stmt.seq {
-    rw Mod,
+    rw stmt.Mod,
     rw stmt.Free,
     exact set.union_subset_union hC₁ hC₂,
   },
   case stmt.choice {
-    rw Mod,
+    rw stmt.Mod,
     rw stmt.Free,
     exact set.union_subset_union hC₁ hC₂,
   },
   case stmt.star {
-    rw Mod,
+    rw stmt.Mod,
     rw stmt.Free,
     exact h,
   },
@@ -371,11 +371,11 @@ begin
   --   exact set.diff_subset_diff_left C_ih,
   -- },
   case stmt.error {
-    rw Mod,
+    rw stmt.Mod,
     rw stmt.Free,
   },
   case stmt.assumes {
-    rw Mod,
+    rw stmt.Mod,
     exact (stmt.assumes C).Free.empty_subset,
   },
 end

@@ -42,9 +42,45 @@ inductive IncorrectnessProof : IncLoLang.prop → IncLoLang.stmt → IncLoLang.p
 | backwards_variant {N: ℕ} {P: ℕ → IncLoLang.prop} {C: IncLoLang.stmt} 
   (H: ∀ n, IncorrectnessProof (P n) C (P (n+1)) IncLoLang.LogicType.ok) :
   IncorrectnessProof (P 0) (C**) (P N) IncLoLang.LogicType.ok
--- | choice
+| choice_left {P Q: IncLoLang.prop} {C₁ C₂: IncLoLang.stmt} {ty: IncLoLang.LogicType} 
+  (H: IncorrectnessProof P C₁ Q ty) :
+  IncorrectnessProof P (C₁ <+> C₂) Q ty
+| choice_right {P Q: IncLoLang.prop} {C₁ C₂: IncLoLang.stmt} {ty: IncLoLang.LogicType} 
+  (H: IncorrectnessProof P C₂ Q ty) :
+  IncorrectnessProof P (C₁ <+> C₂) Q ty
+| error_ok {P: IncLoLang.prop}:
+  IncorrectnessProof P (IncLoLang.stmt.error) (λ_, false) IncLoLang.LogicType.ok
+| error_er {P: IncLoLang.prop}:
+  IncorrectnessProof P (IncLoLang.stmt.error) P IncLoLang.LogicType.er
+| assume_ok {P B: IncLoLang.prop}:
+  IncorrectnessProof P (IncLoLang.stmt.assumes B) (λ σ, P σ ∧ B σ) IncLoLang.LogicType.ok
+| assume_er {P B: IncLoLang.prop}:
+  IncorrectnessProof P (IncLoLang.stmt.assumes B) (λ σ, false) IncLoLang.LogicType.er
+| assignment_ok {P: IncLoLang.prop} {e: IncLoLang.expression} {x: string} :
+  IncorrectnessProof P ([x ↣ e]) (λ σ', (∃ x', (P{x ↣ x'} σ') ∧ σ' x = e (σ'{x ↦ x'}))) IncLoLang.LogicType.ok
+| assignment_er {P: IncLoLang.prop} {e: IncLoLang.expression} {x: string} :
+  IncorrectnessProof P ([x ↣ e]) (λ σ', false) IncLoLang.LogicType.er
+| non_det_assignment_ok {P: IncLoLang.prop} {x: string} :
+  IncorrectnessProof P (IncLoLang.stmt.non_det_assign x) (λ σ', (∃ v, (P{x ↣ v} σ'))) IncLoLang.LogicType.ok
+| non_det_assignment_er {P: IncLoLang.prop} {x: string} :
+  IncorrectnessProof P (IncLoLang.stmt.non_det_assign x) (λ σ', false) IncLoLang.LogicType.er
+| constancy {P Q F: IncLoLang.prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}
+  (HC: IncorrectnessProof P C Q ty) 
+  (Hf: C.Mod ∩ F.Free = ∅) :
+  IncorrectnessProof (λ σ, P σ ∧ F σ) C (λ σ', Q σ' ∧ F σ') ty
+| substitution_1 {P Q: IncLoLang.prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType} {e: IncLoLang.expression} {x: string}
+  (HC: IncorrectnessProof P C Q ty) 
+  (HB: (∃ B: set string, (e.FreeProp B ∧ B.finite)))
+  (He: (e.Free ∪ {x}) ∩ C.Free = ∅): 
+  IncorrectnessProof (λ σ, P (σ{x ↦ e σ})) C (λ σ, Q (σ{x ↦ e σ})) ty
+| substitution_2 {P Q: IncLoLang.prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType} {x y: string}
+  (H₁: [* P *]C[* Q *]ty) 
+  (H₂: y ∉ C.Free ∪ P.Free ∪ Q.Free) 
+  (H₃: x ≠ y): 
+  IncorrectnessProof (P[y//x]) (C{y // x}) (Q[y//x]) ty
 
-lemma IncorectnessProof.soundness {P Q: IncLoLang.prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType} :
+
+lemma IncorectnessProof.soundness {P Q: IncLoLang.prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}:
   IncorrectnessProof P C Q ty → [* P *]C[* Q *]ty :=
 begin
   intro h,
@@ -60,8 +96,19 @@ begin
   case iterate_zero { refine IncLogic.iterate_zero_incorrect, },
   case iterate_non_zero {exact IncLogic.star_seq h_ih,},
   case backwards_variant {exact IncLogic.backwards_variant h_ih h_N,},
-
-
+  case choice_right {exact IncLogic.choice_right_incorrect h_ih,},
+  case choice_left {exact IncLogic.choice_left_incorrect h_ih,},
+  case error_ok {exact IncLogic.error_ok_incorrect},
+  case error_er {exact IncLogic.error_er_incorrect},
+  case assume_ok {exact IncLogic.assume_incorrect_ok,},
+  case assume_er {exact IncLogic.assume_incorrect_er,},
+  case assignment_ok {exact IncLogic.assignment_correct,},
+  case assignment_er {exact IncLogic.empty_under_incorrect},
+  case non_det_assignment_ok {exact IncLogic.non_det_assignment_incorrect},
+  case non_det_assignment_er {exact IncLogic.empty_under_incorrect},
+  case constancy {exact IncLogic.constancy h_Hf h_ih,},
+  case substitution_1 {exact IncLogic.substitution_1 h_HB h_ih h_He,},
+  case substitution_2 {exact IncLogic.substitution_2 h_H₁ h_H₂ h_H₃,},
 end
 
 end IncorrectnessCompleteness
