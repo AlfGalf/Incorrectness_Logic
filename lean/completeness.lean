@@ -101,10 +101,13 @@ lemma IncorectnessProof.completeness {P Q: IncLoLang.prop} {C: IncLoLang.stmt} {
 begin
   revert P Q ty,
   induction C with
-    x e,
+    x e
+    x
+    C₁ C₂ hC₁ hC₂ 
+    C₁ C₂ hC₁ hC₂
+    j k,
   case IncLoLang.stmt.skip {
     intros P Q ty h,
-
     cases ty,
     {
       -- seek that Q is (λ _, false)
@@ -162,26 +165,162 @@ begin
       exact IncorrectnessProof.assignment_er,
     },
     {
-      sorry,
-      -- have Hpq: ∀ σ, Q σ → P σ, {
-      --   intros σ hqσ,
-      --   specialize h σ hqσ, 
-      --   rcases h with ⟨σ', ⟨ hp, hls ⟩⟩,
-      --   cases hls,
-      --   exact hp,
-      -- },
+      have Hpq: ∀ σ, Q σ → (λ σ', ∃ (x' : ℕ), P{x ↣ x'} σ' ∧ σ' x = e (σ'{x ↦ x'})) σ, {
+        simp,
+        intros σ hqσ,
+        specialize h σ hqσ, 
+        rcases h with ⟨σ', ⟨ hp, hls ⟩⟩,
+        cases hls,
+        rw ← IncLoLang.state.update,
+        use σ' x,
+        split,
+        { unfold IncLoLang.p_thing, simp[hp], },
+        { simp, }
+      },
 
-      -- exact IncorrectnessProof.consequence Q Q P Q Hpq (by {intro x, exact id,}) (by {exact IncorrectnessProof.unit_ok,}),
+      refine IncorrectnessProof.consequence P _ P Q (by {intro x, exact id,}) Hpq (IncorrectnessProof.assignment_ok),
     },
   },
   case IncLoLang.stmt.non_det_assign {
-    sorry,
+    intros P Q ty h,
+    cases ty,
+    {
+      -- seek that Q is (λ _, false)
+      have H: Q = λ _, false, {
+        by_contra hQ,
+        have H₂: ∃ σ, Q σ, {
+          by_contra h₂,
+          push_neg at h₂,
+          apply hQ,
+          funext y,
+          specialize h₂ y,
+          exact eq_false_intro h₂,
+        },
+        cases H₂ with σ hσ, 
+        specialize h σ hσ,
+        rcases h with ⟨σ', ⟨ hp, hls ⟩⟩,
+        cases hls,
+      },
+      rw H,
+      exact IncorrectnessProof.non_det_assignment_er,
+    },
+    {
+      have Hpq: ∀ σ, Q σ → (λ σ', ∃ (v : ℕ), P{x ↣ v} σ') σ, {
+        intros σ hqσ,
+        specialize h σ hqσ, 
+        rcases h with ⟨σ', ⟨ hp, hls ⟩⟩,
+        cases hls,
+        rw ← IncLoLang.state.update,
+        use σ' x,
+        unfold IncLoLang.p_thing, 
+        simp[hp],
+      },
+      refine IncorrectnessProof.consequence P _ P Q (by {intro x, exact id,}) Hpq (IncorrectnessProof.non_det_assignment_ok),
+    },
   },
   case IncLoLang.stmt.seq {
-    sorry,
+    intros P Q ty h,
+    cases ty,
+    case LogicType.ok {
+      have H: ∀ σ, Q σ → IncLogic.post IncLoLang.LogicType.ok C₂ (λ σ', IncLogic.post IncLoLang.LogicType.ok C₁ P σ') σ, 
+      { 
+        intros σ hσ, 
+        specialize h σ hσ,
+        rcases h with ⟨ σ', ⟨ hP, hls ⟩ ⟩, 
+        cases hls,
+        use hls_t,
+        simp,
+        split,
+        {
+          use σ',
+          exact ⟨hP, hls_H1⟩,
+        },
+        { exact hls_H2, },
+      },
+
+      have HC₁: [* P *] C₁ [* λ σ, IncLogic.post IncLoLang.LogicType.ok C₁ P σ *]IncLoLang.LogicType.ok, { intro _, exact id, },
+      specialize hC₁ HC₁,
+      have HC₂: [* λ σ, IncLogic.post IncLoLang.LogicType.ok C₁ P σ *] C₂ [* λ σ, IncLogic.post IncLoLang.LogicType.ok C₂ (λ σ', IncLogic.post IncLoLang.LogicType.ok C₁ P σ') σ *]IncLoLang.LogicType.ok, { intro _, exact id, },
+      specialize hC₂ HC₂,
+
+      have X := IncorrectnessProof.sequencing_normal hC₁ hC₂,
+
+      refine IncorrectnessProof.consequence P _ P Q (by {intro x, exact id,}) H X,
+    },
+    case LogicType.er {
+      have H: ∀ σ, Q σ → IncLogic.post IncLoLang.LogicType.er C₂ (λ σ', IncLogic.post IncLoLang.LogicType.ok C₁ P σ') σ ∨ IncLogic.post IncLoLang.LogicType.er C₁ P σ, 
+      { 
+        intros σ hσ, 
+        specialize h σ hσ,
+        rcases h with ⟨ σ', ⟨ hP, hls ⟩ ⟩, 
+        cases hls,
+        {
+          left,
+          use hls_t,
+          simp,
+          split,
+          {
+            use σ',
+            exact ⟨hP, hls_H1⟩,
+          },
+          { exact hls_H2, },
+        },
+        {
+          right,
+          use σ',
+          exact ⟨hP, hls_H1⟩,
+        },
+      },
+
+      have X1: IncorrectnessProof P (C₁ ;; C₂) (λ (σ : IncLoLang.state), IncLogic.post IncLoLang.LogicType.er C₂ (λ (σ' : IncLoLang.state), IncLogic.post IncLoLang.LogicType.ok C₁ P σ') σ) IncLoLang.LogicType.er, {
+        have HC₁: [* P *] C₁ [* λ σ, IncLogic.post IncLoLang.LogicType.ok C₁ P σ *]IncLoLang.LogicType.ok, { intro _, exact id, },
+        specialize hC₁ HC₁,
+        have HC₂: [* λ σ, IncLogic.post IncLoLang.LogicType.ok C₁ P σ *] C₂ [* λ σ, IncLogic.post IncLoLang.LogicType.er C₂ (λ σ', IncLogic.post IncLoLang.LogicType.ok C₁ P σ') σ *]IncLoLang.LogicType.er, { intro _, exact id, },
+        specialize hC₂ HC₂,
+        exact IncorrectnessProof.sequencing_normal hC₁ hC₂,
+      },
+      have X2: IncorrectnessProof P (C₁ ;; C₂) (λ (σ : IncLoLang.state), IncLogic.post IncLoLang.LogicType.er C₁ P σ) IncLoLang.LogicType.er, {
+        have HC₁: [* P *] C₁ [* λ σ, IncLogic.post IncLoLang.LogicType.er C₁ P σ *]IncLoLang.LogicType.er, { intro _, exact id, },
+        specialize hC₁ HC₁,
+        exact IncorrectnessProof.sequencing_short hC₁,
+      },
+
+      have X: IncorrectnessProof P (C₁ ;; C₂) (λ (σ : IncLoLang.state), IncLogic.post IncLoLang.LogicType.er C₂ (λ (σ' : IncLoLang.state), IncLogic.post IncLoLang.LogicType.ok C₁ P σ') σ ∨ IncLogic.post IncLoLang.LogicType.er C₁ P σ) IncLoLang.LogicType.er, {
+        have T := IncorrectnessProof.disjunction X1 X2,
+        simp at T,
+        exact T,
+      },
+
+      refine IncorrectnessProof.consequence P _ P Q (by {intro x, exact id,}) H X,
+    },
   },
   case IncLoLang.stmt.choice {
-    sorry,
+    intros P Q ty h,
+    have H: ∀ σ, Q σ → IncLogic.post ty (C₁ <+> C₂) P σ, { intros σ hσ, exact h σ hσ, },
+    have hPost: ∀ σ, IncLogic.post ty (C₁ <+> C₂) P σ → IncLogic.post ty C₁ P σ ∨ IncLogic.post ty C₂ P σ,
+    {
+      intros σ hσ,
+      rcases hσ with ⟨ σ', ⟨ hσ', hls ⟩⟩, 
+      cases hls,
+      { left, use σ', exact ⟨hσ', hls_h⟩, },
+      { right, use σ', exact ⟨hσ', hls_h⟩, },
+    },
+    have H: ∀ σ, Q σ → IncLogic.post ty C₁ P σ ∨ IncLogic.post ty C₂ P σ, {
+      intros σ hσ,
+      apply hPost,
+      apply H,
+      exact hσ,
+    },
+
+    have HC₁: [* P *] C₁ [* λ σ, IncLogic.post ty C₁ P σ *]ty, { intro _, exact id, },
+    specialize hC₁ HC₁,
+    have HC₂: [* P *] C₂ [* λ σ, IncLogic.post ty C₂ P σ *]ty, { intro _, exact id, },
+    specialize hC₂ HC₂,
+
+    have X := IncorrectnessProof.disjunction (IncorrectnessProof.choice_left hC₁) (IncorrectnessProof.choice_right hC₂),
+    simp at X,
+
+    refine IncorrectnessProof.consequence P _ P Q (by {intro x, exact id,}) H X,
   },
   case IncLoLang.stmt.star {
     sorry,
