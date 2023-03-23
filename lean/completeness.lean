@@ -5,7 +5,7 @@ namespace IncorrectnessCompleteness
 inductive IncorrectnessProof : IncLoLang.prop → IncLoLang.stmt → IncLoLang.prop → IncLoLang.LogicType → Prop
 | empty_under_approx {P: IncLoLang.prop} {ty: IncLoLang.LogicType} {C: IncLoLang.stmt}: 
   IncorrectnessProof P C (λ _, false) ty
-| consequence {P Q P' Q': IncLoLang.prop} {ty: IncLoLang.LogicType} {C: IncLoLang.stmt} (Hp: ∀ σ, P σ → P' σ) (Hq: ∀ σ, Q' σ → Q σ) (H: IncorrectnessProof P C Q ty): 
+| consequence (P Q P' Q': IncLoLang.prop) {ty: IncLoLang.LogicType} {C: IncLoLang.stmt} (Hp: ∀ σ, P σ → P' σ) (Hq: ∀ σ, Q' σ → Q σ) (H: IncorrectnessProof P C Q ty): 
   IncorrectnessProof P' C Q' ty
 | disjunction {P₁ Q₁ P₂ Q₂: IncLoLang.prop} {ty: IncLoLang.LogicType} {C: IncLoLang.stmt} (H₁: IncorrectnessProof P₁ C Q₁ ty) (H₁: IncorrectnessProof P₂ C Q₂ ty): 
   IncorrectnessProof (λ σ, P₁ σ ∨ P₂ σ) C (λ σ, Q₁ σ ∨ Q₂ σ) ty
@@ -100,12 +100,79 @@ lemma IncorectnessProof.completeness {P Q: IncLoLang.prop} {C: IncLoLang.stmt} {
   ([* P *]C[* Q *]ty) → IncorrectnessProof P C Q ty :=
 begin
   revert P Q ty,
-  induction C,
+  induction C with
+    x e,
   case IncLoLang.stmt.skip {
-    sorry,
+    intros P Q ty h,
+
+    cases ty,
+    {
+      -- seek that Q is (λ _, false)
+      have H: Q = λ _, false, {
+        by_contra hQ,
+        have H₂: ∃ σ, Q σ, {
+          by_contra h₂,
+          push_neg at h₂,
+          apply hQ,
+          funext,
+          specialize h₂ x,
+          exact eq_false_intro h₂,
+        },
+        cases H₂ with σ hσ, 
+        specialize h σ hσ,
+        rcases h with ⟨σ', ⟨ hp, hls ⟩⟩,
+        cases hls,
+      },
+      rw H,
+      exact IncorrectnessProof.unit_er,
+    },
+    {
+      have Hpq: ∀ σ, Q σ → P σ, {
+        intros σ hqσ,
+        specialize h σ hqσ, 
+        rcases h with ⟨σ', ⟨ hp, hls ⟩⟩,
+        cases hls,
+        exact hp,
+      },
+
+      exact IncorrectnessProof.consequence Q Q P Q Hpq (by {intro x, exact id,}) (by {exact IncorrectnessProof.unit_ok,}),
+    },
   },
   case IncLoLang.stmt.assign {
-    sorry,
+    intros P Q ty h,
+    cases ty,
+    {
+      -- seek that Q is (λ _, false)
+      have H: Q = λ _, false, {
+        by_contra hQ,
+        have H₂: ∃ σ, Q σ, {
+          by_contra h₂,
+          push_neg at h₂,
+          apply hQ,
+          funext y,
+          specialize h₂ y,
+          exact eq_false_intro h₂,
+        },
+        cases H₂ with σ hσ, 
+        specialize h σ hσ,
+        rcases h with ⟨σ', ⟨ hp, hls ⟩⟩,
+        cases hls,
+      },
+      rw H,
+      exact IncorrectnessProof.assignment_er,
+    },
+    {
+      sorry,
+      -- have Hpq: ∀ σ, Q σ → P σ, {
+      --   intros σ hqσ,
+      --   specialize h σ hqσ, 
+      --   rcases h with ⟨σ', ⟨ hp, hls ⟩⟩,
+      --   cases hls,
+      --   exact hp,
+      -- },
+
+      -- exact IncorrectnessProof.consequence Q Q P Q Hpq (by {intro x, exact id,}) (by {exact IncorrectnessProof.unit_ok,}),
+    },
   },
   case IncLoLang.stmt.non_det_assign {
     sorry,
@@ -120,10 +187,75 @@ begin
     sorry,
   },
   case IncLoLang.stmt.error {
-    sorry,
+    intros P Q ty h,
+    cases ty,
+    {
+      have Hpq: ∀ σ, Q σ → P σ, {
+        intros σ hqσ,
+        specialize h σ hqσ, 
+        rcases h with ⟨σ', ⟨ hp, hls ⟩⟩,
+        cases hls,
+        exact hp,
+      },
+
+      exact IncorrectnessProof.consequence Q Q P Q Hpq (by {intro x, exact id,}) (by {exact IncorrectnessProof.error_er,}),
+    },
+    {
+      -- seek that Q is (λ _, false)
+      have H: Q = λ _, false, {
+        by_contra hQ,
+        have H₂: ∃ σ, Q σ, {
+          by_contra h₂,
+          push_neg at h₂,
+          apply hQ,
+          funext,
+          specialize h₂ x,
+          exact eq_false_intro h₂,
+        },
+        cases H₂ with σ hσ, 
+        specialize h σ hσ,
+        rcases h with ⟨σ', ⟨ hp, hls ⟩⟩,
+        cases hls,
+      },
+      rw H,
+      exact IncorrectnessProof.error_ok,
+    },
   },
   case IncLoLang.stmt.assumes {
-    sorry,
+    intros P Q ty h,
+
+    cases ty,
+    {
+      -- seek that Q is (λ _, false)
+      have H: Q = λ _, false, {
+        by_contra hQ,
+        have H₂: ∃ σ, Q σ, {
+          by_contra h₂,
+          push_neg at h₂,
+          apply hQ,
+          funext,
+          specialize h₂ x,
+          exact eq_false_intro h₂,
+        },
+        cases H₂ with σ hσ, 
+        specialize h σ hσ,
+        rcases h with ⟨σ', ⟨ hp, hls ⟩⟩,
+        cases hls,
+      },
+      rw H,
+      exact IncorrectnessProof.assume_er,
+    },
+    {
+      have Hpq: ∀ σ, Q σ → P σ ∧ C σ, {
+        intros σ hqσ,
+        specialize h σ hqσ, 
+        rcases h with ⟨σ', ⟨ hp, hls ⟩⟩,
+        cases hls,
+        exact ⟨hp, hls_h⟩,
+      },
+
+      exact IncorrectnessProof.consequence P (λ σ, P σ ∧ C σ) P Q (by {intro x, exact id,}) Hpq IncorrectnessProof.assume_ok,
+    },
   },
 end
 
