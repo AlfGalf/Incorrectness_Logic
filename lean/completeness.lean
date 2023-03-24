@@ -24,9 +24,9 @@ inductive IncorrectnessProof : IncLoLang.prop → IncLoLang.stmt → IncLoLang.p
 | iterate_non_zero {P Q: IncLoLang.prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}
   (H: IncorrectnessProof P (C** ;; C) Q ty) :
   IncorrectnessProof P (C**) Q ty
-| backwards_variant {N: ℕ} {P: ℕ → IncLoLang.prop} {C: IncLoLang.stmt} 
+| backwards_variant {P: ℕ → IncLoLang.prop} {C: IncLoLang.stmt} 
   (H: ∀ n, IncorrectnessProof (P n) C (P (n+1)) IncLoLang.LogicType.ok) :
-  IncorrectnessProof (P 0) (C**) (P N) IncLoLang.LogicType.ok
+  IncorrectnessProof (P 0) (C**) (λ σ, ∃ N, P N σ) IncLoLang.LogicType.ok
 | choice_left {P Q: IncLoLang.prop} {C₁ C₂: IncLoLang.stmt} {ty: IncLoLang.LogicType} 
   (H: IncorrectnessProof P C₁ Q ty) :
   IncorrectnessProof P (C₁ <+> C₂) Q ty
@@ -80,7 +80,7 @@ begin
   case sequencing_normal { refine IncLogic.seq_normal_incorrect h_ih_H₁ h_ih_H₂, },
   case iterate_zero { refine IncLogic.iterate_zero_incorrect, },
   case iterate_non_zero {exact IncLogic.star_seq h_ih,},
-  case backwards_variant {exact IncLogic.backwards_variant h_ih h_N,},
+  case backwards_variant {exact IncLogic.backwards_variant h_ih,},
   case choice_right {exact IncLogic.choice_right_incorrect h_ih,},
   case choice_left {exact IncLogic.choice_left_incorrect h_ih,},
   case error_ok {exact IncLogic.error_ok_incorrect},
@@ -94,6 +94,121 @@ begin
   case constancy {exact IncLogic.constancy h_Hf h_ih,},
   case substitution_1 {exact IncLogic.substitution_1 h_HB h_ih h_He,},
   case substitution_2 {exact IncLogic.substitution_2 h_H₁ h_H₂ h_H₃,},
+end
+
+lemma IncorectnessProof.completeness.star_case_ok (C: IncLoLang.stmt)
+(hC: ∀ (P Q : IncLoLang.prop) (ty : IncLoLang.LogicType), ([* P *] C [* Q *]ty) → IncorrectnessProof P C Q ty) :
+∀ (P Q : IncLoLang.prop), ([* P *] C** [* Q *]IncLoLang.LogicType.ok) → IncorrectnessProof P (C**) Q IncLoLang.LogicType.ok :=
+begin
+  intros P Q h, 
+  let P' : ℕ → IncLoLang.prop := λ n, λ σ', ∃ σ, P σ ∧ IncLoLang.lang_semantics (IncLoLang.repeat C n) IncLoLang.LogicType.ok σ σ',
+  have Hpq: ∀ σ, Q σ → ∃ n, P' n σ, {
+    intros σ hσ,
+    specialize h σ hσ,
+    rcases h with ⟨ σ', ⟨ hpσ', hls ⟩ ⟩,
+    cases hls,
+    use hls_i,
+    use σ', 
+    split,
+    { exact hpσ', },
+    { exact hls_h, }
+  },
+  have X: IncorrectnessProof P (C**) (λ σ, ∃ N, P' N σ) IncLoLang.LogicType.ok, {
+    have H: P = P' 0, {
+      ext,
+      split,
+      {
+        intro h,
+        use x,
+        split,
+        { exact h, },
+        { rw IncLoLang.repeat, exact IncLoLang.lang_semantics.skip, },
+      },
+      {
+        intro h,
+        rcases h with ⟨ σ, ⟨ hp, hls ⟩ ⟩,
+        rw IncLoLang.repeat at hls, 
+        cases hls,
+        exact hp,
+      },
+    },
+    rw H,
+
+    refine IncorrectnessProof.backwards_variant (by {
+      intro n,
+      apply hC,
+      intros σ hσ,
+      rcases hσ with ⟨ σ' , ⟨ hPσ', hls ⟩ ⟩,
+      rw IncLoLang.repeat at hls,
+      cases hls,
+      use hls_t,
+      split,
+      {
+        use σ',
+        exact ⟨hPσ', hls_H1⟩,
+      },
+      {
+        exact hls_H2,
+      }
+    }),
+  },
+
+  refine IncorrectnessProof.consequence P _ P Q (by {intro _, exact id,}) Hpq X,
+end
+
+lemma IncorectnessProof.completeness.star_case (C: IncLoLang.stmt)
+(hC: ∀ (P Q : IncLoLang.prop) (ty : IncLoLang.LogicType), ([* P *] C [* Q *]ty) → IncorrectnessProof P C Q ty) :
+∀ (P Q : IncLoLang.prop) (ty : IncLoLang.LogicType), ([* P *] C** [* Q *]ty) → IncorrectnessProof P (C**) Q ty :=
+begin
+  intros P Q ty h,
+  cases ty,
+  case ok {
+    exact IncorectnessProof.completeness.star_case_ok C hC P Q h,
+  },
+  case er {
+    -- let P' : ℕ → IncLoLang.prop := λ n, λ σ', ∃ σ, P σ ∧ IncLoLang.lang_semantics (IncLoLang.repeat C n) IncLoLang.LogicType.ok σ σ',
+    let frontier := IncLogic.post IncLoLang.LogicType.ok (C**) P,
+    have H: [* P *] C** [* frontier *] IncLoLang.LogicType.ok, { intros σ hσ, exact hσ, },
+    have X := IncorectnessProof.completeness.star_case_ok C hC P frontier H,
+
+    have H₂: [* frontier *]C[* Q *]IncLoLang.LogicType.er, {
+      intros σ hσ,
+      specialize h σ hσ,
+
+      rcases h with ⟨ σ', ⟨ hσ', hls ⟩ ⟩,
+      cases hls,
+      induction hls_i,
+      case zero {
+        -- seek contradiciton
+        rw IncLoLang.repeat at hls_h,
+        cases hls_h,
+      },
+      case succ {
+        rw IncLoLang.repeat at hls_h,
+        cases hls_h,
+        {
+          use hls_h_t,
+          split,
+          {
+            use σ',
+            split,
+            { exact hσ', },
+            { exact IncLoLang.lang_semantics.star hls_i_n hls_h_H1, },
+          },
+          {
+            exact hls_h_H2,
+          }
+        },
+        {
+          exact hls_i_ih hls_h_H1,
+        }
+      },
+    },
+    have X₂ := hC frontier Q IncLoLang.LogicType.er H₂,
+
+    have X₃ := IncorrectnessProof.sequencing_normal X X₂,
+    exact IncorrectnessProof.iterate_non_zero X₃,
+  }
 end
 
 lemma IncorectnessProof.completeness {P Q: IncLoLang.prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}:
@@ -323,7 +438,7 @@ begin
     refine IncorrectnessProof.consequence P _ P Q (by {intro x, exact id,}) H X,
   },
   case IncLoLang.stmt.star {
-    sorry,
+    exact IncorectnessProof.completeness.star_case j (by { intros P Q ty, exact k, }),
   },
   case IncLoLang.stmt.error {
     intros P Q ty h,

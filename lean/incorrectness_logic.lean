@@ -657,24 +657,27 @@ end
 /- Backwards variant -/
 lemma backwards_variant {P: ℕ → IncLoLang.state -> Prop} {C: IncLoLang.stmt}
   (H1: ∀ n, [* P n *]C[* P n.succ *]IncLoLang.LogicType.ok ):
-  ∀ n, [* P 0 *]C**[* P n *]IncLoLang.LogicType.ok :=
+  [* P 0 *]C**[* λ σ, ∃ N, P N σ *]IncLoLang.LogicType.ok :=
 begin
-  intros n,
+  intros σ hσ,
+  cases hσ with n hσ,
+  revert σ, 
   induction n,
   {
     intros σ hσ,
-    unfold post,
     use σ,
     split,
-    {exact hσ,},
+    { exact hσ, },
     {
-      exact IncLoLang.lang_semantics.star 0 (by { rw IncLoLang.repeat, exact IncLoLang.lang_semantics.skip, }),
-    },
+      apply IncLoLang.lang_semantics.star 0,
+      rw IncLoLang.repeat,
+      exact IncLoLang.lang_semantics.skip,
+    }
   },
   {
-    specialize H1 n_n,
-    have H := seq_normal_incorrect n_ih H1,
-    exact star_seq H,
+    have X := seq_normal_incorrect n_ih (H1 n_n),
+    have X := iterate_non_zero_incorrect X,
+    exact X,
   }
 end
 
