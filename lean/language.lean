@@ -107,13 +107,13 @@ notation `[` x ` ↣ ` e `]` := stmt.assign x e
 notation `[loc` x `.` C `]` := stmt.local_var x C
 
 /- This is the definition of P[x'/x] used in the paper -/
-def p_thing (P: prop) (x': ℕ) (x: string) : IncLoLang.state -> Prop :=
+def prop.update_val (P: prop) (x': ℕ) (x: string) : IncLoLang.state -> Prop :=
   -- λ σ', ∃ σ, P σ ∧ σ' = σ{x ↦ x'}
   -- This is the definition given int he paper but it is wrong
   λ σ', P (σ'{x ↦ x'})
 -- ie, True for σ if P(σ{x ↦ x'})
 
-notation P `{` name ` ↣ ` val `}` := p_thing P val name
+notation P `{` name ` ↣ ` val `}` := P.update_val val name
 
 /-! # Language semantics -/
 
@@ -626,13 +626,12 @@ begin
   repeat { refl },
 end
 
-lemma p_thing_free {x v} {P: state -> Prop} :
+lemma p_thing_free {x: string} {v: ℕ} {P: prop} :
   prop.Free (P{ x ↣ v }) ⊆ prop.Free P \ {x} :=
 begin
   intros y hy,
   unfold prop.Free at hy,
-  unfold prop.Free,
-  unfold p_thing at hy,
+  unfold prop.update_val at hy,
   cases hy with σ,
   use σ{x ↦ v},
   have Hxy: x ≠ y,

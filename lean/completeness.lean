@@ -64,6 +64,7 @@ inductive IncorrectnessProof : IncLoLang.prop → IncLoLang.stmt → IncLoLang.p
   (H₃: x ≠ y): 
   IncorrectnessProof (P[y//x]) (C{y // x}) (Q[y//x]) ty
 
+/-! ## Soundness -/
 
 lemma IncorectnessProof.soundness {P Q: IncLoLang.prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}:
   IncorrectnessProof P C Q ty → [* P *]C[* Q *]ty :=
@@ -95,6 +96,8 @@ begin
   case substitution_1 {exact IncLogic.substitution_1 h_HB h_ih h_He,},
   case substitution_2 {exact IncLogic.substitution_2 h_H₁ h_H₂ h_H₃,},
 end
+
+/-! ## Completeness -/
 
 lemma IncorectnessProof.completeness.star_case_ok (C: IncLoLang.stmt)
 (hC: ∀ (P Q : IncLoLang.prop) (ty : IncLoLang.LogicType), ([* P *] C [* Q *]ty) → IncorrectnessProof P C Q ty) :
@@ -289,7 +292,7 @@ begin
         rw ← IncLoLang.state.update,
         use σ' x,
         split,
-        { unfold IncLoLang.p_thing, simp[hp], },
+        { unfold IncLoLang.prop.update_val, simp[hp], },
         { simp, }
       },
 
@@ -327,7 +330,7 @@ begin
         cases hls,
         rw ← IncLoLang.state.update,
         use σ' x,
-        unfold IncLoLang.p_thing, 
+        unfold IncLoLang.prop.update_val, 
         simp[hp],
       },
       refine IncorrectnessProof.consequence P _ P Q (by {intro x, exact id,}) Hpq (IncorrectnessProof.non_det_assignment_ok),

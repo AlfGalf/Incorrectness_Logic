@@ -296,8 +296,8 @@ end
 /-! ## Variables and Mutation -/
 
 /- Assignment -/
-lemma assignment_correct {P x e} :
-  [* P *]([x ↣ e])[* λ σ', (∃ x', (P{x ↣ x'} σ') ∧ σ' x = (e (σ'{x ↦ x'}))) *] IncLoLang.LogicType.ok :=
+lemma assignment_correct {P: IncLoLang.prop} {x e} :
+  [* P *]([x ↣ e])[* λ σ', (∃ x': ℕ, (P{x ↣ x'} σ') ∧ σ' x = (e (σ'{x ↦ x'}))) *] IncLoLang.LogicType.ok :=
 begin
   /- Given there exists a x' st P{x ↦ x'} σ' and σ' = e (σ'{x ↦ x'}) -/
   /- x' is the value of x *before* assignment -/
@@ -307,7 +307,7 @@ begin
   rcases hσ' with ⟨x', ⟨ hPσ', hES⟩ ⟩ ,
 
   /- hES says that the value of x' after assignment is the value of e with state σ'{x ↦ x'} -/
-  unfold IncLoLang.p_thing at hPσ',
+  unfold IncLoLang.prop.update_val at hPσ',
 
   /- Recover the start state -/
   use σ'{x ↦ x'},
@@ -340,8 +340,8 @@ begin
   finish,
 end
 
-lemma non_det_assignment_incorrect {P x} :
-  [* P *](IncLoLang.stmt.non_det_assign x)[* λ σ, ∃ x', P{x ↣ x'} σ *] IncLoLang.LogicType.ok :=
+lemma non_det_assignment_incorrect {P: IncLoLang.prop} {x} :
+  [* P *](IncLoLang.stmt.non_det_assign x)[* λ σ, ∃ x': ℕ, (P{x ↣ x'}) σ *] IncLoLang.LogicType.ok :=
 begin
   /- Given there exists a x' st P{x ↦ x'} σ' and σ' = e (σ'{x ↦ x'}) -/
   /- x' is the value of x *before* assignment -/
@@ -355,7 +355,7 @@ begin
   -- use σ,
   use σ'{x ↦ x'},
 
-  unfold IncLoLang.p_thing at hPσ',
+  unfold IncLoLang.prop.update_val at hPσ',
 
   split,
   {
