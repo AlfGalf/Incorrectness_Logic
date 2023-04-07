@@ -18,12 +18,12 @@ namespace IncLoLang
 
 meta def tactic.dec_trivial := `[exact dec_trivial]
 
-def state: Type := string -> ℕ
+def state: Type := string → ℕ
 
-def state.update : string -> ℕ -> state -> state
+def state.update : string → ℕ → state → state
 | name val σ := (λ name', if name' = name then val else σ name')
 
-notation s `{` name ` ↦ ` val `}` := state.update name val s
+notation σ `{` name ` ↦ ` val `}` := state.update name val σ
 
 @[simp] lemma state.update_apply (name : string) (val : ℕ) (s : state) :
   s{name ↦ val} name = val :=
@@ -66,7 +66,7 @@ begin
   apply funext,
   intro name',
   by_cases name' = name;
-    simp * at *
+  simp * at *
 end
 
 @[simp] lemma state.update_same_const (name : string) (val : ℕ) :
@@ -104,7 +104,7 @@ postfix `**` : 90 := stmt.star
 
 notation `[` x ` ↣ ` e `]` := stmt.assign x e
 
-notation `[loc` x `.` C `]` := stmt.local_var x C
+-- notation `[loc` x `.` C `]` := stmt.local_var x C
 
 /- This is the definition of P[x'/x] used in the paper -/
 def prop.update_val (P: prop) (x': ℕ) (x: string) : IncLoLang.state -> Prop :=
@@ -151,7 +151,6 @@ inductive lang_semantics: IncLoLang.stmt → LogicType → IncLoLang.state → I
 
 /-! # Free-/
 
--- Perhaps invert
 def prop.Free (P: prop): set string :=
   λ x, ∃ σ v, (P σ ∧ ¬(P (σ{x ↦ v})))
 
@@ -232,10 +231,10 @@ def stmt.Free: stmt → set string
 | (C₁ ;; C₂)                := (stmt.Free C₁) ∪ (stmt.Free C₂)
 | (C₁ <+> C₂)               := (stmt.Free C₁) ∪ (stmt.Free C₂)
 | (C**)                     := stmt.Free C
--- | [loc z . C]               := (stmt.Free C)
--- | [loc z . C]               := (stmt.Free C) \ {z}
 | stmt.error                := {}
 | (stmt.assumes P)          := prop.Free P
+-- | [loc z . C]               := (stmt.Free C)
+-- | [loc z . C]               := (stmt.Free C) \ {z}
 
 /-! # Substitute-/
 

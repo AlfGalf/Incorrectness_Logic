@@ -59,7 +59,7 @@ inductive IncorrectnessProof : IncLoLang.prop → IncLoLang.stmt → IncLoLang.p
   (He: (e.Free ∪ {x}) ∩ C.Free = ∅): 
   IncorrectnessProof (λ σ, P (σ{x ↦ e σ})) C (λ σ, Q (σ{x ↦ e σ})) ty
 | substitution_2 {P Q: IncLoLang.prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType} {x y: string}
-  (H₁: [* P *]C[* Q *]ty) 
+  (H₁: [* P *]C[* ty: Q *]) 
   (H₂: y ∉ C.Free ∪ P.Free ∪ Q.Free) 
   (H₃: x ≠ y): 
   IncorrectnessProof (P[y//x]) (C{y // x}) (Q[y//x]) ty
@@ -67,7 +67,7 @@ inductive IncorrectnessProof : IncLoLang.prop → IncLoLang.stmt → IncLoLang.p
 /-! ## Soundness -/
 
 lemma IncorectnessProof.soundness {P Q: IncLoLang.prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}:
-  IncorrectnessProof P C Q ty → [* P *]C[* Q *]ty :=
+  IncorrectnessProof P C Q ty → [* P *]C[* ty: Q *] :=
 begin
   intro h,
   induction h,
@@ -100,8 +100,8 @@ end
 /-! ## Completeness -/
 
 lemma IncorectnessProof.completeness.star_case_ok (C: IncLoLang.stmt)
-(hC: ∀ (P Q : IncLoLang.prop) (ty : IncLoLang.LogicType), ([* P *] C [* Q *]ty) → IncorrectnessProof P C Q ty) :
-∀ (P Q : IncLoLang.prop), ([* P *] C** [* Q *]IncLoLang.LogicType.ok) → IncorrectnessProof P (C**) Q IncLoLang.LogicType.ok :=
+(hC: ∀ (P Q : IncLoLang.prop) (ty : IncLoLang.LogicType), ([* P *] C [* ty: Q *]) → IncorrectnessProof P C Q ty) :
+∀ (P Q : IncLoLang.prop), ([* P *] C** [* IncLoLang.LogicType.ok: Q *]) → IncorrectnessProof P (C**) Q IncLoLang.LogicType.ok :=
 begin
   intros P Q h, 
   let P' : ℕ → IncLoLang.prop := λ n, λ σ', ∃ σ, P σ ∧ IncLoLang.lang_semantics (IncLoLang.repeat C n) IncLoLang.LogicType.ok σ σ',
@@ -160,8 +160,8 @@ begin
 end
 
 lemma IncorectnessProof.completeness.star_case (C: IncLoLang.stmt)
-(hC: ∀ (P Q : IncLoLang.prop) (ty : IncLoLang.LogicType), ([* P *] C [* Q *]ty) → IncorrectnessProof P C Q ty) :
-∀ (P Q : IncLoLang.prop) (ty : IncLoLang.LogicType), ([* P *] C** [* Q *]ty) → IncorrectnessProof P (C**) Q ty :=
+(hC: ∀ (P Q : IncLoLang.prop) (ty : IncLoLang.LogicType), ([* P *] C [* ty: Q *]) → IncorrectnessProof P C Q ty) :
+∀ (P Q : IncLoLang.prop) (ty : IncLoLang.LogicType), ([* P *] C** [* ty: Q *]) → IncorrectnessProof P (C**) Q ty :=
 begin
   intros P Q ty h,
   cases ty,
@@ -171,10 +171,10 @@ begin
   case er {
     -- let P' : ℕ → IncLoLang.prop := λ n, λ σ', ∃ σ, P σ ∧ IncLoLang.lang_semantics (IncLoLang.repeat C n) IncLoLang.LogicType.ok σ σ',
     let frontier := IncLogic.post IncLoLang.LogicType.ok (C**) P,
-    have H: [* P *] C** [* frontier *] IncLoLang.LogicType.ok, { intros σ hσ, exact hσ, },
+    have H: [* P *] C** [* IncLoLang.LogicType.ok: frontier *], { intros σ hσ, exact hσ, },
     have X := IncorectnessProof.completeness.star_case_ok C hC P frontier H,
 
-    have H₂: [* frontier *]C[* Q *]IncLoLang.LogicType.er, {
+    have H₂: [* frontier *]C[* IncLoLang.LogicType.er: Q *], {
       intros σ hσ,
       specialize h σ hσ,
 
@@ -215,7 +215,7 @@ begin
 end
 
 lemma IncorectnessProof.completeness {P Q: IncLoLang.prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}:
-  ([* P *]C[* Q *]ty) → IncorrectnessProof P C Q ty :=
+  ([* P *]C[* ty: Q *]) → IncorrectnessProof P C Q ty :=
 begin
   revert P Q ty,
   induction C with
@@ -356,9 +356,9 @@ begin
         { exact hls_H2, },
       },
 
-      have HC₁: [* P *] C₁ [* λ σ, IncLogic.post IncLoLang.LogicType.ok C₁ P σ *]IncLoLang.LogicType.ok, { intro _, exact id, },
+      have HC₁: [* P *] C₁ [* IncLoLang.LogicType.ok: λ σ, IncLogic.post IncLoLang.LogicType.ok C₁ P σ *], { intro _, exact id, },
       specialize hC₁ HC₁,
-      have HC₂: [* λ σ, IncLogic.post IncLoLang.LogicType.ok C₁ P σ *] C₂ [* λ σ, IncLogic.post IncLoLang.LogicType.ok C₂ (λ σ', IncLogic.post IncLoLang.LogicType.ok C₁ P σ') σ *]IncLoLang.LogicType.ok, { intro _, exact id, },
+      have HC₂: [* λ σ, IncLogic.post IncLoLang.LogicType.ok C₁ P σ *] C₂ [* IncLoLang.LogicType.ok: λ σ, IncLogic.post IncLoLang.LogicType.ok C₂ (λ σ', IncLogic.post IncLoLang.LogicType.ok C₁ P σ') σ *], { intro _, exact id, },
       specialize hC₂ HC₂,
 
       have X := IncorrectnessProof.sequencing_normal hC₁ hC₂,
@@ -391,14 +391,14 @@ begin
       },
 
       have X1: IncorrectnessProof P (C₁ ;; C₂) (λ (σ : IncLoLang.state), IncLogic.post IncLoLang.LogicType.er C₂ (λ (σ' : IncLoLang.state), IncLogic.post IncLoLang.LogicType.ok C₁ P σ') σ) IncLoLang.LogicType.er, {
-        have HC₁: [* P *] C₁ [* λ σ, IncLogic.post IncLoLang.LogicType.ok C₁ P σ *]IncLoLang.LogicType.ok, { intro _, exact id, },
+        have HC₁: [* P *] C₁ [* IncLoLang.LogicType.ok: λ σ, IncLogic.post IncLoLang.LogicType.ok C₁ P σ *], { intro _, exact id, },
         specialize hC₁ HC₁,
-        have HC₂: [* λ σ, IncLogic.post IncLoLang.LogicType.ok C₁ P σ *] C₂ [* λ σ, IncLogic.post IncLoLang.LogicType.er C₂ (λ σ', IncLogic.post IncLoLang.LogicType.ok C₁ P σ') σ *]IncLoLang.LogicType.er, { intro _, exact id, },
+        have HC₂: [* λ σ, IncLogic.post IncLoLang.LogicType.ok C₁ P σ *] C₂ [* IncLoLang.LogicType.er: λ σ, IncLogic.post IncLoLang.LogicType.er C₂ (λ σ', IncLogic.post IncLoLang.LogicType.ok C₁ P σ') σ *], { intro _, exact id, },
         specialize hC₂ HC₂,
         exact IncorrectnessProof.sequencing_normal hC₁ hC₂,
       },
       have X2: IncorrectnessProof P (C₁ ;; C₂) (λ (σ : IncLoLang.state), IncLogic.post IncLoLang.LogicType.er C₁ P σ) IncLoLang.LogicType.er, {
-        have HC₁: [* P *] C₁ [* λ σ, IncLogic.post IncLoLang.LogicType.er C₁ P σ *]IncLoLang.LogicType.er, { intro _, exact id, },
+        have HC₁: [* P *] C₁ [* IncLoLang.LogicType.er: λ σ, IncLogic.post IncLoLang.LogicType.er C₁ P σ *], { intro _, exact id, },
         specialize hC₁ HC₁,
         exact IncorrectnessProof.sequencing_short hC₁,
       },
@@ -430,9 +430,9 @@ begin
       exact hσ,
     },
 
-    have HC₁: [* P *] C₁ [* λ σ, IncLogic.post ty C₁ P σ *]ty, { intro _, exact id, },
+    have HC₁: [* P *] C₁ [* ty: λ σ, IncLogic.post ty C₁ P σ *], { intro _, exact id, },
     specialize hC₁ HC₁,
-    have HC₂: [* P *] C₂ [* λ σ, IncLogic.post ty C₂ P σ *]ty, { intro _, exact id, },
+    have HC₂: [* P *] C₂ [* ty: λ σ, IncLogic.post ty C₂ P σ *], { intro _, exact id, },
     specialize hC₂ HC₂,
 
     have X := IncorrectnessProof.disjunction (IncorrectnessProof.choice_left hC₁) (IncorrectnessProof.choice_right hC₂),

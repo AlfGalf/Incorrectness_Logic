@@ -18,77 +18,31 @@ namespace IncLogic
 
 /-! ## Post -/
 /- the def of post from the paper-/
-def post (ty: IncLoLang.LogicType) (r: IncLoLang.stmt) (p: IncLoLang.state -> Prop) : IncLoLang.state -> Prop 
-  := λ σ', ∃ σ, p σ ∧ IncLoLang.lang_semantics r ty σ σ'
+def post (ty: IncLoLang.LogicType) (C: IncLoLang.stmt) (P: IncLoLang.state -> Prop) : 
+  IncLoLang.state → Prop := 
+  λ σ', ∃ σ, P σ ∧ IncLoLang.lang_semantics C ty σ σ'
 
 /-! ## Incorrectness logic and Hoare logic encodings -/
 
-def incorrectness_stmt (type: IncLoLang.LogicType) (P : (IncLoLang.state) → Prop) (R : IncLoLang.stmt)
-  (Q : (IncLoLang.state) → Prop) : Prop := 
-  ∀ state, Q state -> ((post type R) P) state
+def incorrectness_triple (ty: IncLoLang.LogicType) (P: IncLoLang.prop) 
+  (R: IncLoLang.stmt) (Q : IncLoLang.prop) : Prop := 
+  ∀ state, Q state → post ty R P state
 
-def hoare_stmt (type: IncLoLang.LogicType) (P : (IncLoLang.state) → Prop) (R : IncLoLang.stmt)
-  (Q : (IncLoLang.state) → Prop) : Prop := 
-  ∀ state, ((post type R) P) state -> Q state
+def hoare_triple (ty: IncLoLang.LogicType) (P: IncLoLang.prop) 
+  (R: IncLoLang.stmt) (Q: IncLoLang.prop) : Prop := 
+  ∀ state, post ty R P state -> Q state
 
 /-! ## Notation -/
-notation `{* ` P : 1 ` *} ` S : 1 ` {* ` Q : 1 ` *}` ty: 2 :=
-  hoare_stmt ty P S Q
+notation `{* ` P : 1 ` *} ` S : 1 ` {* ` ty `:` Q : 1 ` *}` :=
+  hoare_triple ty P S Q
 
-notation `[* ` P : 1 ` *] ` S : 1 ` [* ` Q : 1 ` *]` ty: 2 :=
-  incorrectness_stmt ty P S Q
-
-/-! ## Lemmas-/
-lemma hoare_skip_intro_ok { P: IncLoLang.state -> Prop } : {* P *} IncLoLang.stmt.skip {* P *} IncLoLang.LogicType.ok:=
-begin
-  intros state h,
-
-  rcases h with ⟨σ, ⟨h₁, h₂⟩⟩,
-
-  cases h₂,
-  finish,
-end
-
-lemma inc_skip_intro_er { P: IncLoLang.state -> Prop } : [* P *] IncLoLang.stmt.error [* P *] IncLoLang.LogicType.er :=
-begin
-  intros state h,
-
-  use state,
-
-  split,
-  { finish, },
-  { exact IncLoLang.lang_semantics.error },
-end
-
-lemma seq_intro_hoare {P Q R S T} (hS : {* P *} S {* Q *} IncLoLang.LogicType.ok)
-    (hT : {* Q *} T {* R *} IncLoLang.LogicType.ok) :
-  {* P *} S ;; T {* R *} IncLoLang.LogicType.ok :=
-begin
-  intros end_state,
-  intro hST,
-  specialize hT end_state,
-  apply hT,
-  rcases hST with ⟨start_state, ⟨start_P, hST⟩ ⟩,
-  cases hST,
-  use hST_t,
-  split,  
-  {
-    specialize hS hST_t,
-    apply hS,
-    use start_state,
-    split,
-    { exact start_P, },
-    { exact hST_H1, },
-  },
-  {
-    exact hST_H2,
-  },
-end
+notation `[* ` P : 1 ` *] ` S : 1 ` [* ` ty `:` Q : 1 ` *]` :=
+  incorrectness_triple ty P S Q
 
 /-! ## Incorrectness rules -/
 
 /- Empty under approximates -/ 
-lemma empty_under_incorrect {P C ty} : [* P *] C [* λ st, false *] ty :=
+lemma empty_under_incorrect {P C ty} : [* P *] C [* ty: λ st, false *] :=
 begin
   intro state,
   finish,
@@ -97,8 +51,8 @@ end
 /- Consequence-/
 lemma consequence_incorrect {P Q C ty} 
   {P': IncLoLang.state -> Prop} 
-  {Q': IncLoLang.state -> Prop} (h : [* P *] C [* Q *]ty) (hQ: ∀ st, Q' st -> Q st) (hP: ∀ st, P st -> P' st):
-  [* P' *] C [* Q' *]ty :=
+  {Q': IncLoLang.state -> Prop} (h : [* P *] C [* ty: Q *]) (hQ: ∀ st, Q' st -> Q st) (hP: ∀ st, P st -> P' st):
+  [* P' *] C [* ty: Q' *]:=
 begin
   intros state hQ',
   specialize hQ state hQ',
@@ -110,9 +64,9 @@ end
 
 /- Disjunction -/
 lemma disjunction_incorrect {P₁ P₂ Q₁ Q₂ C ty} 
-  (h₁ : [* P₁ *] C [* Q₁ *] ty) 
-  (h₂ : [* P₂ *] C [* Q₂ *] ty):
-  [* λ σ, P₁ σ ∨ P₂ σ *] C [* λ σ, Q₁ σ ∨ Q₂ σ *] ty :=
+  (h₁ : [* P₁ *] C [* ty: Q₁ *]) 
+  (h₂ : [* P₂ *] C [* ty: Q₂ *]):
+  [* λ σ, P₁ σ ∨ P₂ σ *] C [* ty: λ σ, Q₁ σ ∨ Q₂ σ *] :=
 begin
   intros end_state hEnd,
   cases hEnd,
@@ -141,7 +95,7 @@ begin
 end
 
 /- Unit Ok -/
-lemma unit_incorrect_ok {P} : [* P *] IncLoLang.stmt.skip [* P *] IncLoLang.LogicType.ok :=
+lemma unit_incorrect_ok {P} : [* P *] IncLoLang.stmt.skip [* IncLoLang.LogicType.ok: P *] :=
 begin
   intros end_state hP,
   use end_state,
@@ -151,15 +105,15 @@ begin
 end
 
 /- Unit Err -/
-lemma unit_incorrect_err {P} : [* P *] IncLoLang.stmt.skip [* λ _, false *] IncLoLang.LogicType.er :=
+lemma unit_incorrect_err {P} : [* P *] IncLoLang.stmt.skip [* IncLoLang.LogicType.er: λ _, false *] :=
 begin
   intros end_state hP,
   use end_state,
 end
 
 /- Sequencing short circuit -/ 
-lemma seq_short_circuit_incorrect {P R S} {T: IncLoLang.stmt} (hS : [* P *] S [* R *] IncLoLang.LogicType.er) :
-  [* P *] S ;; T [* R *] IncLoLang.LogicType.er :=
+lemma seq_short_circuit_incorrect {P R S} {T: IncLoLang.stmt} (hS : [* P *] S [* IncLoLang.LogicType.er: R *] ) :
+  [* P *] S ;; T [* IncLoLang.LogicType.er: R *] :=
 begin
   intros end_state hStartR,
   specialize hS end_state hStartR,
@@ -169,9 +123,9 @@ begin
 end
 
 /- Sequencing normal -/ 
-lemma seq_normal_incorrect {P Q R S T ty} (hS : [* P *] S [* Q *] IncLoLang.LogicType.ok)
-    (hT : [* Q *] T [* R *] ty) :
-  [* P *] S ;; T [* R *] ty :=
+lemma seq_normal_incorrect {P Q R S T ty} (hS : [* P *] S [* IncLoLang.LogicType.ok: Q *])
+    (hT : [* Q *] T [* ty: R *]) :
+  [* P *] S ;; T [* ty: R *] :=
 begin
   intros end_state hStartR,
   specialize hT end_state hStartR,
@@ -189,7 +143,7 @@ end
 
 /- Iterate zero -/
 lemma iterate_zero_incorrect {C P} :
-  [* P *] (C**) [* P *]IncLoLang.LogicType.ok :=
+  [* P *] (C**) [* IncLoLang.LogicType.ok: P *] :=
 begin
   intros state hState,
   use state,
@@ -205,8 +159,8 @@ begin
 end
 
 /- Iterate non-zero -/
-lemma iterate_non_zero_incorrect {C P Q ty} (h: [* P *] C** ;; C [* Q *]ty):
-  [* P *] (C**) [* Q *]ty :=
+lemma iterate_non_zero_incorrect {C P Q ty} (h: [* P *] C** ;; C [* ty: Q *]):
+  [* P *] (C**) [* ty: Q *] :=
 begin
   intros state hState,
   specialize h state hState,
@@ -229,8 +183,8 @@ begin
 end
 
 /- Choice left -/
-lemma choice_left_incorrect {C₁ C₂ P Q ty} (h: [* P *] C₁ [* Q *]ty):
-  [* P *] (C₁.choice C₂)  [* Q *]ty :=
+lemma choice_left_incorrect {C₁ C₂ P Q ty} (h: [* P *] C₁ [* ty: Q *]):
+  [* P *] (C₁.choice C₂)  [* ty: Q *] :=
 begin
   intros state hState,
   specialize h state hState,
@@ -242,8 +196,8 @@ begin
 end
 
 /- Choice right -/
-lemma choice_right_incorrect {C₁ C₂ P Q ty} (h: [* P *] C₂ [* Q *]ty):
-  [* P *] (IncLoLang.stmt.choice C₁ C₂)  [* Q *]ty :=
+lemma choice_right_incorrect {C₁ C₂ P Q ty} (h: [* P *] C₂ [* ty: Q *]):
+  [* P *] (IncLoLang.stmt.choice C₁ C₂) [* ty: Q *] :=
 begin
   intros state hState,
   specialize h state hState,
@@ -256,7 +210,7 @@ end
 
 /- Error er -/
 lemma error_er_incorrect {P}:
-  [* P *] (IncLoLang.stmt.error)  [* P *]IncLoLang.LogicType.er :=
+  [* P *] (IncLoLang.stmt.error) [* IncLoLang.LogicType.er: P *] :=
 begin
   intros state hState,
   use state,
@@ -267,7 +221,7 @@ end
 
 /- Error ok -/
 lemma error_ok_incorrect {P}:
-  [* P *] (IncLoLang.stmt.error)  [* λ st, false *]IncLoLang.LogicType.ok :=
+  [* P *] (IncLoLang.stmt.error)  [* IncLoLang.LogicType.ok: λ st, false *] :=
 begin
   intros state hState,
   use state,
@@ -275,7 +229,7 @@ end
 
 /- Assume ok -/
 lemma assume_incorrect_ok {P B} :
-  [* P *] (IncLoLang.stmt.assumes B)[* (λ st, P st ∧ B st) *]IncLoLang.LogicType.ok :=
+  [* P *] (IncLoLang.stmt.assumes B)[* IncLoLang.LogicType.ok: (λ st, P st ∧ B st) *] :=
 begin
   rintros state ⟨ hState, hB⟩ ,
   use state,
@@ -286,7 +240,7 @@ end
 
 /- Assume er -/
 lemma assume_incorrect_er {P B} :
-  [* P *] (IncLoLang.stmt.assumes B)[* λ st, false *]IncLoLang.LogicType.er :=
+  [* P *] (IncLoLang.stmt.assumes B)[* IncLoLang.LogicType.er: λ st, false *] :=
 begin
   intros state hState,
   use state,
@@ -297,7 +251,7 @@ end
 
 /- Assignment -/
 lemma assignment_correct {P: IncLoLang.prop} {x e} :
-  [* P *]([x ↣ e])[* λ σ', (∃ x': ℕ, (P{x ↣ x'} σ') ∧ σ' x = (e (σ'{x ↦ x'}))) *] IncLoLang.LogicType.ok :=
+  [* P *]([x ↣ e])[* IncLoLang.LogicType.ok: λ σ', (∃ x': ℕ, (P{x ↣ x'} σ') ∧ σ' x = (e (σ'{x ↦ x'}))) *] :=
 begin
   /- Given there exists a x' st P{x ↦ x'} σ' and σ' = e (σ'{x ↦ x'}) -/
   /- x' is the value of x *before* assignment -/
@@ -335,13 +289,13 @@ end
 
 /- Assignment er -/
 lemma assignment_incorrect_er {P x e} :
-  [* P *](IncLoLang.stmt.assign x e)[* λ_, false *] IncLoLang.LogicType.er :=
+  [* P *](IncLoLang.stmt.assign x e)[* IncLoLang.LogicType.er: λ_, false *] :=
 begin
   finish,
 end
 
 lemma non_det_assignment_incorrect {P: IncLoLang.prop} {x} :
-  [* P *](IncLoLang.stmt.non_det_assign x)[* λ σ, ∃ x': ℕ, (P{x ↣ x'}) σ *] IncLoLang.LogicType.ok :=
+  [* P *](IncLoLang.stmt.non_det_assign x)[* IncLoLang.LogicType.ok: λ σ, ∃ x': ℕ, (P{x ↣ x'}) σ *] :=
 begin
   /- Given there exists a x' st P{x ↦ x'} σ' and σ' = e (σ'{x ↦ x'}) -/
   /- x' is the value of x *before* assignment -/
@@ -623,8 +577,8 @@ begin
 end
 
 lemma constancy {P Q F: IncLoLang.prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}
-  (H1: C.Mod ∩ F.Free = ∅) (H2: [* P *]C[* Q *]ty ):
-  [* λ st, P st ∧ F st *]C[* λ st, Q st ∧ F st *]ty :=
+  (H1: C.Mod ∩ F.Free = ∅) (H2: [* P *]C[* ty: Q *] ):
+  [* λ st, P st ∧ F st *]C[* ty: λ st, Q st ∧ F st *] :=
 begin
   rintros σ' ⟨ hσQ, hσF⟩,
   specialize H2 σ' hσQ,
@@ -643,7 +597,7 @@ begin
 end
 
 lemma star_seq {P Q: IncLoLang.state -> Prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}:
-  ([* P *]C** ;; C[* Q *]ty) → ([* P *]C**[* Q *]ty) :=
+  ([* P *]C** ;; C[* ty: Q *]) → ([* P *]C**[* ty: Q *]) :=
 begin
   intros h σend hQσend,
   specialize h σend hQσend,
@@ -656,8 +610,8 @@ end
 
 /- Backwards variant -/
 lemma backwards_variant {P: ℕ → IncLoLang.state -> Prop} {C: IncLoLang.stmt}
-  (H1: ∀ n, [* P n *]C[* P n.succ *]IncLoLang.LogicType.ok ):
-  [* P 0 *]C**[* λ σ, ∃ N, P N σ *]IncLoLang.LogicType.ok :=
+  (H1: ∀ n, [* P n *]C[* IncLoLang.LogicType.ok: P n.succ *] ):
+  [* P 0 *]C**[* IncLoLang.LogicType.ok: λ σ, ∃ N, P N σ *] :=
 begin
   intros σ hσ,
   cases hσ with n hσ,
@@ -682,10 +636,10 @@ begin
 end
 
 -- lemma local_variable {P C Q ty} {y x: string} 
---   (H₁: [* P *] C{y//x} [* Q *]ty) 
+--   (H₁: [* P *] C{y//x} [* ty: Q *]) 
 --   (H₂: y ∉ (IncLoLang.prop.Free P ∪ IncLoLang.stmt.Free C))
 --   (H₃: y ≠ x): 
---     [* P *] [loc x . C ] [* λ σ, ∃ v_y: ℕ, Q (σ{y ↦ v_y}) *]ty :=
+--     [* P *] [loc x . C ] [* ty: λ σ, ∃ v_y: ℕ, Q (σ{y ↦ v_y}) *] :=
 -- begin
 --   -- Following proof in the paper
 --   -- Suppose [p]C(y/x)[ε:q] and (σq | x → v,y → vy) ∈ ∃y.q.
@@ -743,8 +697,8 @@ end
 
 lemma substitution_1 {P Q ty} {C: IncLoLang.stmt} {e: IncLoLang.expression} {x: string} 
   (HB: (∃ B: set string, (e.FreeProp B ∧ B.finite)))
-  (H₁: [* P *]C[* Q *]ty) (H₂: (e.Free ∪ {x}) ∩ C.Free = ∅): 
-  [* λ σ, P (σ{x ↦ e σ}) *] C [* λ σ, Q (σ{x ↦ e σ}) *]ty := 
+  (H₁: [* P *]C[* ty: Q *]) (H₂: (e.Free ∪ {x}) ∩ C.Free = ∅): 
+  [* λ σ, P (σ{x ↦ e σ}) *] C [* ty: λ σ, Q (σ{x ↦ e σ}) *] := 
 begin
   intros σ' hσ',
   specialize H₁ (σ'{x ↦ e σ'}) hσ',
@@ -801,8 +755,8 @@ begin
 end
 
 lemma substitution_2 {P Q: IncLoLang.prop} {C ty} {x y: string} 
-  (H₁: [* P *]C[* Q *]ty) (H₂: y ∉ C.Free ∪ P.Free ∪ Q.Free) (H₃: x ≠ y): 
-  [* P[y//x] *] C{y // x} [* Q[y//x] *]ty := 
+  (H₁: [* P *]C[* ty: Q *]) (H₂: y ∉ C.Free ∪ P.Free ∪ Q.Free) (H₃: x ≠ y): 
+  [* P[y//x] *] C{y // x} [* ty: Q[y//x] *] := 
 begin
   intros σ' hσ',
   unfold IncLoLang.prop.substitute at hσ',
