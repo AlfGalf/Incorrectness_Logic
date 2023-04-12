@@ -18,21 +18,21 @@ namespace IncLoLang
 
 meta def tactic.dec_trivial := `[exact dec_trivial]
 
-def state: Type := string → ℕ
+def state: Type := string → ℤ 
 
-def state.update : string → ℕ → state → state
+def state.update : string → ℤ → state → state
 | name val σ := (λ name', if name' = name then val else σ name')
 
 notation σ `{` name ` ↦ ` val `}` := state.update name val σ
 
-@[simp] lemma state.update_apply (name : string) (val : ℕ) (s : state) :
+@[simp] lemma state.update_apply (name : string) (val : ℤ) (s : state) :
   s{name ↦ val} name = val :=
 begin
   unfold state.update,
   finish,
 end
 
-@[simp] lemma state.update_apply_ne (name name' : string) (val : ℕ) (s : state)
+@[simp] lemma state.update_apply_ne (name name' : string) (val : ℤ) (s : state)
     (h : name' ≠ name) :
   s{name ↦ val} name' = s name' :=
 begin
@@ -40,7 +40,7 @@ begin
   exact if_neg h,
 end
 
-@[simp] lemma state.update_override (name : string) (val₁ val₂ : ℕ) (s : state) :
+@[simp] lemma state.update_override (name : string) (val₁ val₂ : ℤ) (s : state) :
   s{name ↦ val₂}{name ↦ val₁} = s{name ↦ val₁} :=
 begin
   apply funext,
@@ -49,7 +49,7 @@ begin
     simp [h]
 end
 
-@[simp] lemma state.update_swap (name₁ name₂ : string) (val₁ val₂ : ℕ) (s : state)
+@[simp] lemma state.update_swap (name₁ name₂ : string) (val₁ val₂ : ℤ) (s : state)
     (h : name₁ ≠ name₂ . tactic.dec_trivial) :
   s{name₂ ↦ val₂}{name₁ ↦ val₁} = s{name₁ ↦ val₁}{name₂ ↦ val₂} :=
 begin
@@ -65,21 +65,20 @@ end
 begin
   apply funext,
   intro name',
-  by_cases name' = name;
-  simp * at *
+  by_cases name' = name; simp * at *,
 end
 
-@[simp] lemma state.update_same_const (name : string) (val : ℕ) :
+@[simp] lemma state.update_same_const (name : string) (val : ℤ) :
   (λ_, val){name ↦ val} = (λ_, val) :=
 by apply funext; simp
 
 /-! # Propositions -/
 
-def prop: Type := state -> Prop
+def prop: Type := state → Prop
 
 /-! # Expression -/
 
-def expression: Type := state -> ℕ
+def expression: Type := state → ℤ
 
 /-! ## Language -/
 
@@ -107,7 +106,7 @@ notation `[` x ` ↣ ` e `]` := stmt.assign x e
 -- notation `[loc` x `.` C `]` := stmt.local_var x C
 
 /- This is the definition of P[x'/x] used in the paper -/
-def prop.update_val (P: prop) (x': ℕ) (x: string) : IncLoLang.state -> Prop :=
+def prop.update_val (P: prop) (x': ℤ) (x: string) : IncLoLang.state → Prop :=
   -- λ σ', ∃ σ, P σ ∧ σ' = σ{x ↦ x'}
   -- This is the definition given int he paper but it is wrong
   λ σ', P (σ'{x ↦ x'})
@@ -136,7 +135,7 @@ inductive lang_semantics: IncLoLang.stmt → LogicType → IncLoLang.state → I
   lang_semantics IncLoLang.stmt.error LogicType.er s s
 | assign {x s e} :
   lang_semantics [x ↣ e] LogicType.ok s (s{x ↦ (e s)})
-| non_det_assign {x s} (v: ℕ) :
+| non_det_assign {x s} (v: ℤ) :
   lang_semantics (IncLoLang.stmt.non_det_assign x) LogicType.ok s (s{x ↦ v})
 | assumes_ok {s} {B: prop} (h: B s) :
   lang_semantics (IncLoLang.stmt.assumes B) LogicType.ok s s
@@ -146,7 +145,7 @@ inductive lang_semantics: IncLoLang.stmt → LogicType → IncLoLang.state → I
   lang_semantics (C₁ <+> C₂) ty s₁ s₂
 | star {C s₁ s₂ ty} (i: ℕ) (h: lang_semantics (repeat C i) ty s₁ s₂):
   lang_semantics (C**) ty s₁ s₂
--- | local_var {C s₁ s₂ ty} (x: string) (v: ℕ) (h: lang_semantics C ty s₁ s₂):
+-- | local_var {C s₁ s₂ ty} (x: string) (v: ℤ) (h: lang_semantics C ty s₁ s₂):
 --   lang_semantics ([loc x . C]) ty (s₁{x ↦ v}) (s₂{x ↦ v})
 
 /-! # Free-/
@@ -259,10 +258,10 @@ def stmt.substitute : string → string → stmt → stmt
 | x y (C₁ ;; C₂)                := (stmt.substitute x y C₁) ;; (stmt.substitute x y C₂)
 | x y (C₁ <+> C₂)               := (stmt.substitute x y C₁) <+> (stmt.substitute x y C₂)
 | x y (C**)                     := (stmt.substitute x y C)**
--- | x y [loc z . C]               := if x = z then [loc x . C] else [loc z . (stmt.substitute x y C)]
--- | x y [loc z . C]               := if x = z then [loc x . C] else (if y = z then C else [loc z . (stmt.substitute x y C)])
 | x y stmt.error                := stmt.error
 | x y (stmt.assumes P)          := stmt.assumes (P[y//x])
+-- | x y [loc z . C]               := if x = z then [loc x . C] else [loc z . (stmt.substitute x y C)]
+-- | x y [loc z . C]               := if x = z then [loc x . C] else (if y = z then C else [loc z . (stmt.substitute x y C)])
 
 notation C `{` exp `//` name `}` :=  stmt.substitute name exp C
 
@@ -625,7 +624,7 @@ begin
   repeat { refl },
 end
 
-lemma p_thing_free {x: string} {v: ℕ} {P: prop} :
+lemma p_thing_free {x: string} {v: ℤ} {P: prop} :
   prop.Free (P{ x ↣ v }) ⊆ prop.Free P \ {x} :=
 begin
   intros y hy,
@@ -1251,21 +1250,6 @@ begin
   exact H₂₃,
 end
 
--- lemma finite_powerset (B: set string) : B.finite → (𝒫 B).finite := 
--- begin 
---   intro h,
-
---   have hA := set.finite.exists_finset_coe h,
---   cases hA,
-
---   have hB := finset.coe_powerset (hA_w),
---   rw hA_h at hB,
-
---   let X : finset (set string) := ((hA_h.powerset).map (⟨coe, finset.coe_injective⟩)),
-  
---   exact set.finite.of_finset (hA_w.powerset) hB,
--- end 
-
 -- From https://leanprover.zulipchat.com/#narrow/stream/113489-new-members/topic/Arguments.20with.20infinite.20sets.20and.20decidability
 lemma finite_powerset {α} {s : set α} (h : s.finite) : (𝒫 s).finite :=
 begin
@@ -1352,7 +1336,7 @@ begin
   }),
 end
 
-lemma for_all_free_expression {e: expression} {σ σ': state } 
+theorem for_all_free_expression {e: expression} {σ σ': state } 
   (H: ∀ x ∈ e.Free, σ x = σ' x) (H₂: ∃ A, e.FreeProp A ∧ A.finite): e σ = e σ' :=
 begin 
   -- if e σ ≠ e σ'

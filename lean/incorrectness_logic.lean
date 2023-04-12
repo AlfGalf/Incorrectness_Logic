@@ -18,7 +18,7 @@ namespace IncLogic
 
 /-! ## Post -/
 /- the def of post from the paper-/
-def post (ty: IncLoLang.LogicType) (C: IncLoLang.stmt) (P: IncLoLang.state -> Prop) : 
+def post (ty: IncLoLang.LogicType) (C: IncLoLang.stmt) (P: IncLoLang.state → Prop) : 
   IncLoLang.state → Prop := 
   λ σ', ∃ σ, P σ ∧ IncLoLang.lang_semantics C ty σ σ'
 
@@ -30,7 +30,7 @@ def incorrectness_triple (ty: IncLoLang.LogicType) (P: IncLoLang.prop)
 
 def hoare_triple (ty: IncLoLang.LogicType) (P: IncLoLang.prop) 
   (R: IncLoLang.stmt) (Q: IncLoLang.prop) : Prop := 
-  ∀ state, post ty R P state -> Q state
+  ∀ state, post ty R P state → Q state
 
 /-! ## Notation -/
 notation `{* ` P : 1 ` *} ` S : 1 ` {* ` ty `:` Q : 1 ` *}` :=
@@ -50,8 +50,8 @@ end
 
 /- Consequence-/
 lemma consequence_incorrect {P Q C ty} 
-  {P': IncLoLang.state -> Prop} 
-  {Q': IncLoLang.state -> Prop} (h : [* P *] C [* ty: Q *]) (hQ: ∀ st, Q' st -> Q st) (hP: ∀ st, P st -> P' st):
+  {P': IncLoLang.state → Prop} 
+  {Q': IncLoLang.state → Prop} (h : [* P *] C [* ty: Q *]) (hQ: ∀ σ, Q' σ → Q σ) (hP: ∀ σ, P σ → P' σ):
   [* P' *] C [* ty: Q' *]:=
 begin
   intros state hQ',
@@ -63,7 +63,7 @@ begin
 end
 
 /- Disjunction -/
-lemma disjunction_incorrect {P₁ P₂ Q₁ Q₂ C ty} 
+lemma disjunction_incorrect (P₁ P₂ Q₁ Q₂ C ty) 
   (h₁ : [* P₁ *] C [* ty: Q₁ *]) 
   (h₂ : [* P₂ *] C [* ty: Q₂ *]):
   [* λ σ, P₁ σ ∨ P₂ σ *] C [* ty: λ σ, Q₁ σ ∨ Q₂ σ *] :=
@@ -123,7 +123,7 @@ begin
 end
 
 /- Sequencing normal -/ 
-lemma seq_normal_incorrect {P Q R S T ty} (hS : [* P *] S [* IncLoLang.LogicType.ok: Q *])
+lemma seq_normal_incorrect {P R S T ty} (Q) (hS : [* P *] S [* IncLoLang.LogicType.ok: Q *])
     (hT : [* Q *] T [* ty: R *]) :
   [* P *] S ;; T [* ty: R *] :=
 begin
@@ -142,7 +142,7 @@ begin
 end
 
 /- Iterate zero -/
-lemma iterate_zero_incorrect {C P} :
+lemma iterate_zero_incorrect {C} (P) :
   [* P *] (C**) [* IncLoLang.LogicType.ok: P *] :=
 begin
   intros state hState,
@@ -228,8 +228,8 @@ begin
 end
 
 /- Assume ok -/
-lemma assume_incorrect_ok {P B} :
-  [* P *] (IncLoLang.stmt.assumes B)[* IncLoLang.LogicType.ok: (λ st, P st ∧ B st) *] :=
+lemma assume_incorrect_ok (P B) :
+  [* P *] (IncLoLang.stmt.assumes B)[* IncLoLang.LogicType.ok: (λ σ, P σ ∧ B σ) *] :=
 begin
   rintros state ⟨ hState, hB⟩ ,
   use state,
@@ -250,8 +250,8 @@ end
 /-! ## Variables and Mutation -/
 
 /- Assignment -/
-lemma assignment_correct {P: IncLoLang.prop} {x e} :
-  [* P *]([x ↣ e])[* IncLoLang.LogicType.ok: λ σ', (∃ x': ℕ, (P{x ↣ x'} σ') ∧ σ' x = (e (σ'{x ↦ x'}))) *] :=
+lemma assignment_correct (P: IncLoLang.prop) (x e) :
+  [* P *]([x ↣ e])[* IncLoLang.LogicType.ok: λ σ', (∃ x': ℤ, (P{x ↣ x'} σ') ∧ σ' x = (e (σ'{x ↦ x'}))) *] :=
 begin
   /- Given there exists a x' st P{x ↦ x'} σ' and σ' = e (σ'{x ↦ x'}) -/
   /- x' is the value of x *before* assignment -/
@@ -294,8 +294,8 @@ begin
   finish,
 end
 
-lemma non_det_assignment_incorrect {P: IncLoLang.prop} {x} :
-  [* P *](IncLoLang.stmt.non_det_assign x)[* IncLoLang.LogicType.ok: λ σ, ∃ x': ℕ, (P{x ↣ x'}) σ *] :=
+lemma non_det_assignment_incorrect (P: IncLoLang.prop) (x) :
+  [* P *](IncLoLang.stmt.non_det_assign x)[* IncLoLang.LogicType.ok: λ σ, ∃ x': ℤ, (P{x ↣ x'}) σ *] :=
 begin
   /- Given there exists a x' st P{x ↦ x'} σ' and σ' = e (σ'{x ↦ x'}) -/
   /- x' is the value of x *before* assignment -/
@@ -388,7 +388,7 @@ begin
 end
 
 /- Consistency for the star case -/
-lemma star_helper {F: IncLoLang.state -> Prop} {C: IncLoLang.stmt} :
+lemma star_helper {F: IncLoLang.state → Prop} {C: IncLoLang.stmt} :
   (∀ ty σ σ', IncLoLang.lang_semantics C ty σ σ' → (F σ ↔ F σ')) → 
     (∀ ty σ σ', IncLoLang.lang_semantics (C**) ty σ σ' → (F σ ↔ F σ')) :=
 begin
@@ -578,7 +578,7 @@ end
 
 lemma constancy {P Q F: IncLoLang.prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}
   (H1: C.Mod ∩ F.Free = ∅) (H2: [* P *]C[* ty: Q *] ):
-  [* λ st, P st ∧ F st *]C[* ty: λ st, Q st ∧ F st *] :=
+  [* λ σ, P σ ∧ F σ *]C[* ty: λ σ, Q σ ∧ F σ *] :=
 begin
   rintros σ' ⟨ hσQ, hσF⟩,
   specialize H2 σ' hσQ,
@@ -596,7 +596,7 @@ begin
   {exact hσ'',},
 end
 
-lemma star_seq {P Q: IncLoLang.state -> Prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}:
+lemma star_seq {P Q: IncLoLang.state → Prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}:
   ([* P *]C** ;; C[* ty: Q *]) → ([* P *]C**[* ty: Q *]) :=
 begin
   intros h σend hQσend,
@@ -609,7 +609,7 @@ begin
 end
 
 /- Backwards variant -/
-lemma backwards_variant {P: ℕ → IncLoLang.state -> Prop} {C: IncLoLang.stmt}
+lemma backwards_variant {P: ℕ → IncLoLang.state → Prop} {C: IncLoLang.stmt}
   (H1: ∀ n, [* P n *]C[* IncLoLang.LogicType.ok: P n.succ *] ):
   [* P 0 *]C**[* IncLoLang.LogicType.ok: λ σ, ∃ N, P N σ *] :=
 begin
@@ -629,7 +629,7 @@ begin
     }
   },
   {
-    have X := seq_normal_incorrect n_ih (H1 n_n),
+    have X := seq_normal_incorrect _ n_ih (H1 n_n),
     have X := iterate_non_zero_incorrect X,
     exact X,
   }
@@ -639,7 +639,7 @@ end
 --   (H₁: [* P *] C{y//x} [* ty: Q *]) 
 --   (H₂: y ∉ (IncLoLang.prop.Free P ∪ IncLoLang.stmt.Free C))
 --   (H₃: y ≠ x): 
---     [* P *] [loc x . C ] [* ty: λ σ, ∃ v_y: ℕ, Q (σ{y ↦ v_y}) *] :=
+--     [* P *] [loc x . C ] [* ty: λ σ, ∃ v_y: ℤ, Q (σ{y ↦ v_y}) *] :=
 -- begin
 --   -- Following proof in the paper
 --   -- Suppose [p]C(y/x)[ε:q] and (σq | x → v,y → vy) ∈ ∃y.q.
