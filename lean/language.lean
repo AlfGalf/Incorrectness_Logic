@@ -19,11 +19,13 @@ namespace IncLoLang
 meta def tactic.dec_trivial := `[exact dec_trivial]
 
 def state: Type := string → ℤ 
+example: state := λ v, if v = "y" then 1 else 0
 
 def state.update : string → ℤ → state → state
 | name val σ := (λ name', if name' = name then val else σ name')
 
 notation σ `{` name ` ↦ ` val `}` := state.update name val σ
+example (σ : state): state := (σ{"x" ↦ 2 })
 
 @[simp] lemma state.update_apply (name : string) (val : ℤ) (s : state) :
   s{name ↦ val} name = val :=
@@ -72,13 +74,15 @@ end
   (λ_, val){name ↦ val} = (λ_, val) :=
 by apply funext; simp
 
-/-! # Propositions -/
+/-! # Predicates -/
 
 def prop: Type := state → Prop
+example: prop := λ σ, σ "x" > 1 
 
 /-! # Expression -/
 
 def expression: Type := state → ℤ
+example: expression := λ σ, σ "x" + 1 
 
 /-! ## Language -/
 
@@ -96,14 +100,12 @@ inductive stmt : Type
 -- Language notation
 
 infixr ` ;; ` : 90 := stmt.seq
-
 infixr ` <+> ` : 90 := stmt.choice
-
 postfix `**` : 90 := stmt.star
-
 notation `[` x ` ↣ ` e `]` := stmt.assign x e
-
 -- notation `[loc` x `.` C `]` := stmt.local_var x C
+-- eg. (stmt.assume λ σ, σ "n" < 5) ;; [ "y" ↣ λ σ, σ "y" + σ "n" ] ;; ["n" ↣ λ σ, σ "n" + 1 ])** ;; (assume λ σ, σ "n" ≥ 5 ;; error)
+example: stmt := ( stmt.assumes (λ σ, σ "n" < 5) ;; [ "y" ↣ (λ σ, σ "y" + σ "n")] ;; ["n" ↣ (λ σ, σ "n" + 1)])** ;; (stmt.assumes (λ σ, σ "n" ≥ 5) ;; stmt.error)
 
 /- This is the definition of P[x'/x] used in the paper -/
 def prop.update_val (P: prop) (x': ℤ) (x: string) : IncLoLang.state → Prop :=
@@ -148,6 +150,10 @@ inductive lang_semantics: IncLoLang.stmt → LogicType → IncLoLang.state → I
 -- | local_var {C s₁ s₂ ty} (x: string) (v: ℤ) (h: lang_semantics C ty s₁ s₂):
 --   lang_semantics ([loc x . C]) ty (s₁{x ↦ v}) (s₂{x ↦ v})
 
+example: lang_semantics stmt.skip LogicType.ok (λ v, 0) (λ v, 0) := lang_semantics.skip
+example: lang_semantics ["x" ↣ λ σ, 5] LogicType.ok (λ v, 0) (λ v, if v = "x" then 5 else 0) := lang_semantics.assign
+example: lang_semantics stmt.error LogicType.er (λ v, 0) (λ v, 0) := lang_semantics.error
+
 /-! # Free-/
 
 def prop.Free (P: prop): set string :=
@@ -174,7 +180,6 @@ def expression.Free (e: expression): set string :=
 
 lemma expression.Free.semantics (e: expression) {x: string}: 
   x ∈ expression.Free e ↔ ∃ σ v, e σ ≠ e (σ{x ↦ v}) := 
-  -- λ x, ∃ σ v, e σ ≠ e (σ{x ↦ v})
 begin
   split,
   {
@@ -277,6 +282,8 @@ def stmt.Mod: stmt → set string
 | (IncLoLang.stmt.assumes _) := {}
 | (IncLoLang.stmt.error) := {}
 -- | (IncLoLang.stmt.local_var x C) := Mod C \ {x}
+
+example : stmt.Mod ( ["x" ↣ λ σ, σ "y"] ;; ["y" ↣ λ σ, σ "z" ^ 2]) = {"x", "y"} := by {finish}
 
 lemma mod_elem_left_elem_seq (C₁ C₂: stmt):
    C₁.Mod ⊆ (C₁ ;; C₂).Mod :=

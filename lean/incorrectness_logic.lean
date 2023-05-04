@@ -24,20 +24,25 @@ def post (ty: IncLoLang.LogicType) (C: IncLoLang.stmt) (P: IncLoLang.state → P
 
 /-! ## Incorrectness logic and Hoare logic encodings -/
 
-def incorrectness_triple (ty: IncLoLang.LogicType) (P: IncLoLang.prop) 
+def underaproximation_triple (ty: IncLoLang.LogicType) (P: IncLoLang.prop) 
   (R: IncLoLang.stmt) (Q : IncLoLang.prop) : Prop := 
   ∀ state, Q state → post ty R P state
 
-def hoare_triple (ty: IncLoLang.LogicType) (P: IncLoLang.prop) 
+def overaproximation_triple (ty: IncLoLang.LogicType) (P: IncLoLang.prop) 
   (R: IncLoLang.stmt) (Q: IncLoLang.prop) : Prop := 
   ∀ state, post ty R P state → Q state
 
+
+
 /-! ## Notation -/
 notation `{* ` P : 1 ` *} ` S : 1 ` {* ` ty `:` Q : 1 ` *}` :=
-  hoare_triple ty P S Q
+  overaproximation_triple ty P S Q
 
 notation `[* ` P : 1 ` *] ` S : 1 ` [* ` ty `:` Q : 1 ` *]` :=
-  incorrectness_triple ty P S Q
+  underaproximation_triple ty P S Q
+
+example (P Q: IncLoLang.prop) (C: IncLoLang.stmt): Prop := [* P *]C[* IncLoLang.LogicType.ok: Q*]
+example (P Q: IncLoLang.prop) (C: IncLoLang.stmt): Prop := {* P *}C{* IncLoLang.LogicType.ok: Q*}
 
 /-! ## Incorrectness rules -/
 
@@ -50,8 +55,8 @@ end
 
 /- Consequence-/
 lemma consequence_incorrect {P Q C ty} 
-  {P': IncLoLang.state → Prop} 
-  {Q': IncLoLang.state → Prop} (h : [* P *] C [* ty: Q *]) (hQ: ∀ σ, Q' σ → Q σ) (hP: ∀ σ, P σ → P' σ):
+  {P': IncLoLang.prop} {Q': IncLoLang.prop} 
+  (h : [* P *] C [* ty: Q *]) (hQ: ∀ σ, Q' σ → Q σ) (hP: ∀ σ, P σ → P' σ):
   [* P' *] C [* ty: Q' *]:=
 begin
   intros state hQ',
@@ -104,13 +109,6 @@ begin
   { exact IncLoLang.lang_semantics.skip, },
 end
 
-/- Unit Err -/
-lemma unit_incorrect_err {P} : [* P *] IncLoLang.stmt.skip [* IncLoLang.LogicType.er: λ _, false *] :=
-begin
-  intros end_state hP,
-  use end_state,
-end
-
 /- Sequencing short circuit -/ 
 lemma seq_short_circuit_incorrect {P R S} {T: IncLoLang.stmt} (hS : [* P *] S [* IncLoLang.LogicType.er: R *] ) :
   [* P *] S ;; T [* IncLoLang.LogicType.er: R *] :=
@@ -123,8 +121,8 @@ begin
 end
 
 /- Sequencing normal -/ 
-lemma seq_normal_incorrect {P R S T ty} (Q) (hS : [* P *] S [* IncLoLang.LogicType.ok: Q *])
-    (hT : [* Q *] T [* ty: R *]) :
+lemma seq_normal_incorrect {P R S T ty} (Q: IncLoLang.prop) 
+  (hS : [* P *] S [* IncLoLang.LogicType.ok: Q *]) (hT : [* Q *] T [* ty: R *]) :
   [* P *] S ;; T [* ty: R *] :=
 begin
   intros end_state hStartR,
@@ -135,10 +133,7 @@ begin
   use start_state,
   split,
   { exact hStartP, },
-  {
-    cases ty,
-    repeat { exact IncLoLang.lang_semantics.seq_ty t r },
-  },
+  { cases ty, repeat { exact IncLoLang.lang_semantics.seq_ty t r }, },
 end
 
 /- Iterate zero -/
@@ -184,7 +179,7 @@ end
 
 /- Choice left -/
 lemma choice_left_incorrect {C₁ C₂ P Q ty} (h: [* P *] C₁ [* ty: Q *]):
-  [* P *] (C₁.choice C₂)  [* ty: Q *] :=
+  [* P *] (C₁ <+> C₂)  [* ty: Q *] :=
 begin
   intros state hState,
   specialize h state hState,
@@ -197,7 +192,7 @@ end
 
 /- Choice right -/
 lemma choice_right_incorrect {C₁ C₂ P Q ty} (h: [* P *] C₂ [* ty: Q *]):
-  [* P *] (IncLoLang.stmt.choice C₁ C₂) [* ty: Q *] :=
+  [* P *] (C₁ <+> C₂) [* ty: Q *] :=
 begin
   intros state hState,
   specialize h state hState,
@@ -219,14 +214,6 @@ begin
   { exact IncLoLang.lang_semantics.error, },
 end
 
-/- Error ok -/
-lemma error_ok_incorrect {P}:
-  [* P *] (IncLoLang.stmt.error)  [* IncLoLang.LogicType.ok: λ st, false *] :=
-begin
-  intros state hState,
-  use state,
-end
-
 /- Assume ok -/
 lemma assume_incorrect_ok (P B) :
   [* P *] (IncLoLang.stmt.assumes B)[* IncLoLang.LogicType.ok: (λ σ, P σ ∧ B σ) *] :=
@@ -236,15 +223,6 @@ begin
   split,
   {exact hState, },
   {exact IncLoLang.lang_semantics.assumes_ok hB, },
-end
-
-/- Assume er -/
-lemma assume_incorrect_er {P B} :
-  [* P *] (IncLoLang.stmt.assumes B)[* IncLoLang.LogicType.er: λ st, false *] :=
-begin
-  intros state hState,
-  use state,
-  /- The fact this is so easy is a little concerning -/
 end
 
 /-! ## Variables and Mutation -/
@@ -285,13 +263,6 @@ begin
     nth_rewrite 1 H2,
     exact IncLoLang.lang_semantics.assign,
   },
-end
-
-/- Assignment er -/
-lemma assignment_incorrect_er {P x e} :
-  [* P *](IncLoLang.stmt.assign x e)[* IncLoLang.LogicType.er: λ_, false *] :=
-begin
-  finish,
 end
 
 lemma non_det_assignment_incorrect (P: IncLoLang.prop) (x) :
@@ -538,42 +509,6 @@ begin
 
     exact (star_helper C_ih) ty startst endst h,
   },
-  -- case IncLoLang.stmt.local_var {
-  --   rename C_ᾰ x,
-  --   rename C_ᾰ_1 C,
-
-  --   /- 
-  --     ∀ (y : string), y ∈ IncLoLang.Mod [loc x . C] → IncLoLang.Free F y
-  --     If y is modified by [loc x . C] then F is free on y (ie. if C modifies y (and y != x??) they F free on y)
-
-  --     IncLoLang.lang_semantics [locx.C] ty σ σ' → (F σ ↔ F σ')
-  --   -/
-
-  --   intros ty σ σ' hlC,
-  --   cases hlC,
-
-  --   specialize C_ih (F{ x ↣ hlC_v}),
-  --   rw IncLoLang.Mod at H1,
-
-  --   have H: (IncLoLang.Mod C) ∩ IncLoLang.prop.Free (F{x ↣ hlC_v}) ⊆ ∅, {
-  --     calc (IncLoLang.Mod C) ∩ IncLoLang.prop.Free (F{x ↣ hlC_v}) ⊆ (IncLoLang.Mod C) ∩ (IncLoLang.prop.Free (F) \ {x}) : (IncLoLang.Mod C).inter_subset_inter_right (IncLoLang.p_thing_free)
-  --     ... = (IncLoLang.Mod C \ {x}) ∩ IncLoLang.prop.Free F : (by {
-  --       -- exact help,
-  --       have H: ∀ x: Type, ∀ A B C: set x, (A ∩ (B \ C)) = (A \ C) ∩ B ,
-  --       {
-  --         intros x a b c,
-  --         ext,
-  --         finish,
-  --       },
-  --       exact H string (IncLoLang.Mod C) (IncLoLang.prop.Free F) ({x}),
-  --     })
-  --     ... = ∅ : H1,
-  --   },
-  --   have H: (IncLoLang.Mod C) ∩ IncLoLang.prop.Free (F{x ↣ hlC_v}) = ∅, { exact set.subset_eq_empty H rfl, },
-  --   specialize C_ih H ty hlC_s₁ hlC_s₂ hlC_h,
-  --   unfold IncLoLang.p_thing at C_ih,
-  --   exact C_ih,
-  -- },
 end
 
 lemma constancy {P Q F: IncLoLang.prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}
@@ -624,15 +559,10 @@ begin
     { exact hσ, },
     {
       apply IncLoLang.lang_semantics.star 0,
-      rw IncLoLang.repeat,
       exact IncLoLang.lang_semantics.skip,
     }
   },
-  {
-    have X := seq_normal_incorrect _ n_ih (H1 n_n),
-    have X := iterate_non_zero_incorrect X,
-    exact X,
-  }
+  { exact iterate_non_zero_incorrect (seq_normal_incorrect _ n_ih (H1 n_n)), }
 end
 
 -- lemma local_variable {P C Q ty} {y x: string} 
@@ -824,17 +754,3 @@ begin
 end
 
 end IncLogic
-
-/-! ### TODO: 
-
-- [x] Assignment
-- [x] Nondet Assignment
-- [x] Constancy
-- [x] Local variable encoding
-- [nope] Local variable rule
-- [x] Substitution 1
-- [x] Substitution 2
-- [x] Backwards varient
-
-- [ ] Free encodings
--/

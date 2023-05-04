@@ -1,6 +1,6 @@
 import lean.incorrectness_logic
 
-namespace IncorrectnessCompleteness
+namespace IncCompleteness
 
 inductive IncorrectnessProof : IncLoLang.prop → IncLoLang.stmt → IncLoLang.prop → IncLoLang.LogicType → Prop
 | empty_under_approx {P: IncLoLang.prop} {ty: IncLoLang.LogicType} {C: IncLoLang.stmt}: 
@@ -11,8 +11,6 @@ inductive IncorrectnessProof : IncLoLang.prop → IncLoLang.stmt → IncLoLang.p
   IncorrectnessProof (λ σ, P₁ σ ∨ P₂ σ) C (λ σ, Q₁ σ ∨ Q₂ σ) ty
 | unit_ok {P: IncLoLang.prop}: 
   IncorrectnessProof P IncLoLang.stmt.skip P IncLoLang.LogicType.ok
-| unit_er {P: IncLoLang.prop}: 
-  IncorrectnessProof P IncLoLang.stmt.skip (λ _, false) IncLoLang.LogicType.er
 | sequencing_short {P Q: IncLoLang.prop} {C₁ C₂: IncLoLang.stmt} (H: IncorrectnessProof P C₁ Q IncLoLang.LogicType.er): 
   IncorrectnessProof P (C₁;;C₂) Q IncLoLang.LogicType.er
 | sequencing_normal {P Q R: IncLoLang.prop} {C₁ C₂: IncLoLang.stmt} {ty: IncLoLang.LogicType}
@@ -33,22 +31,14 @@ inductive IncorrectnessProof : IncLoLang.prop → IncLoLang.stmt → IncLoLang.p
 | choice_right {P Q: IncLoLang.prop} {C₁ C₂: IncLoLang.stmt} {ty: IncLoLang.LogicType} 
   (H: IncorrectnessProof P C₂ Q ty) :
   IncorrectnessProof P (C₁ <+> C₂) Q ty
-| error_ok {P: IncLoLang.prop}:
-  IncorrectnessProof P (IncLoLang.stmt.error) (λ_, false) IncLoLang.LogicType.ok
 | error_er {P: IncLoLang.prop}:
   IncorrectnessProof P (IncLoLang.stmt.error) P IncLoLang.LogicType.er
 | assume_ok {P B: IncLoLang.prop}:
   IncorrectnessProof P (IncLoLang.stmt.assumes B) (λ σ, P σ ∧ B σ) IncLoLang.LogicType.ok
-| assume_er {P B: IncLoLang.prop}:
-  IncorrectnessProof P (IncLoLang.stmt.assumes B) (λ σ, false) IncLoLang.LogicType.er
-| assignment_ok {P: IncLoLang.prop} {e: IncLoLang.expression} {x: string} :
+| assignment_ok (P: IncLoLang.prop) (e: IncLoLang.expression) (x: string) :
   IncorrectnessProof P ([x ↣ e]) (λ σ', (∃ x', (P{x ↣ x'} σ') ∧ σ' x = e (σ'{x ↦ x'}))) IncLoLang.LogicType.ok
-| assignment_er {P: IncLoLang.prop} {e: IncLoLang.expression} {x: string} :
-  IncorrectnessProof P ([x ↣ e]) (λ σ', false) IncLoLang.LogicType.er
 | non_det_assignment_ok {P: IncLoLang.prop} {x: string} :
   IncorrectnessProof P (IncLoLang.stmt.non_det_assign x) (λ σ', (∃ v, (P{x ↣ v} σ'))) IncLoLang.LogicType.ok
-| non_det_assignment_er {P: IncLoLang.prop} {x: string} :
-  IncorrectnessProof P (IncLoLang.stmt.non_det_assign x) (λ σ', false) IncLoLang.LogicType.er
 | constancy {P Q F: IncLoLang.prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}
   (HC: IncorrectnessProof P C Q ty) 
   (Hf: C.Mod ∩ F.Free = ∅) :
@@ -64,9 +54,31 @@ inductive IncorrectnessProof : IncLoLang.prop → IncLoLang.stmt → IncLoLang.p
   (H₃: x ≠ y): 
   IncorrectnessProof (P[y//x]) (C{y // x}) (Q[y//x]) ty
 
+example: IncorrectnessProof (λ σ, σ "x" = 0) (["x" ↣ λ σ, σ "x" + 1]**) (λ σ, σ "x" = 5) IncLoLang.LogicType.ok :=
+begin
+  let P: ℕ → IncLoLang.prop := (λ n, λ σ, σ "x" = n), 
+
+  have H1 := (λ n, IncorrectnessProof.assignment_ok (P n) (λ σ, σ "x" + 1) "x"),
+
+  have H2: ∀ n, ∀ σ, P (n+1) σ → (∃ x', (P n){"x"↣x'} σ ∧ σ "x" = ((σ{"x"↦x'} "x")+1)), {
+    intros n σ hσ, 
+    use n, 
+    exact ⟨ by {rw IncLoLang.prop.update_val, finish}, hσ⟩,  
+  },
+
+  have H3: ∀ n, IncorrectnessProof (P n) (["x" ↣ λ σ, σ "x" + 1]) (P (n + 1)) IncLoLang.LogicType.ok, {
+    intro n,
+    exact IncorrectnessProof.consequence (P n) _ (P n) (P (n + 1)) (by { intro _, exact id, }) (H2 n) (H1 n),
+  },
+
+  have H4 := IncorrectnessProof.backwards_variant H3, 
+
+  exact IncorrectnessProof.consequence (P 0) _ _ _ (by { intros σ hσ, exact hσ, }) (by { intros σ hσ, use 5, exact hσ, }) H4,
+end
+
 /-! ## Soundness -/
 
-theorem IncorectnessProof.soundness {P Q: IncLoLang.prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}:
+theorem IncorrectnessProof.soundness {P Q: IncLoLang.prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}:
   IncorrectnessProof P C Q ty → [* P *]C[* ty: Q *] :=
 begin
   intro h,
@@ -75,7 +87,6 @@ begin
   case consequence { exact IncLogic.consequence_incorrect h_ih h_Hq h_Hp, },
   case disjunction { exact IncLogic.disjunction_incorrect h_P₁ h_P₂ h_Q₁ h_Q₂ h_C h_ty h_ih_H₁ h_ih_H₁_1, },
   case unit_ok { refine IncLogic.unit_incorrect_ok},
-  case unit_er { refine IncLogic.unit_incorrect_err},
   case sequencing_short { refine IncLogic.seq_short_circuit_incorrect h_ih, },
   case sequencing_normal { exact IncLogic.seq_normal_incorrect h_Q h_ih_H₁ h_ih_H₂},
   case iterate_zero { refine IncLogic.iterate_zero_incorrect h_P, },
@@ -83,22 +94,42 @@ begin
   case backwards_variant {exact IncLogic.backwards_variant h_ih,},
   case choice_right {exact IncLogic.choice_right_incorrect h_ih,},
   case choice_left {exact IncLogic.choice_left_incorrect h_ih,},
-  case error_ok {exact IncLogic.error_ok_incorrect},
   case error_er {exact IncLogic.error_er_incorrect},
   case assume_ok {exact IncLogic.assume_incorrect_ok h_P h_B,},
-  case assume_er {exact IncLogic.assume_incorrect_er,},
   case assignment_ok {exact IncLogic.assignment_correct h_P h_x h_e},
-  case assignment_er {exact IncLogic.empty_under_incorrect},
   case non_det_assignment_ok {exact IncLogic.non_det_assignment_incorrect h_P h_x},
-  case non_det_assignment_er {exact IncLogic.empty_under_incorrect},
   case constancy {exact IncLogic.constancy h_Hf h_ih,},
   case substitution_1 {exact IncLogic.substitution_1 h_HB h_ih h_He,},
   case substitution_2 {exact IncLogic.substitution_2 h_H₁ h_H₂ h_H₃,},
 end
 
+
+example: [* λ σ, σ "x" = 0 *] (["x" ↣ λ σ, σ "x" + 1]**) [*  IncLoLang.LogicType.ok: λ σ, σ "x" = 5 *] :=
+begin
+  let P: ℕ → IncLoLang.prop := (λ n, λ σ, σ "x" = n), 
+
+  have H1 := (λ n, IncorrectnessProof.assignment_ok (P n) (λ σ, σ "x" + 1) "x"),
+
+  have H2: ∀ n, ∀ σ, P (n+1) σ → (∃ x', (P n){"x"↣x'} σ ∧ σ "x" = ((σ{"x"↦x'} "x")+1)), {
+    intros n σ hσ, 
+    use n, 
+    exact ⟨ by {rw IncLoLang.prop.update_val, finish}, hσ⟩,  
+  },
+
+  have H3: ∀ n, IncorrectnessProof (P n) (["x" ↣ λ σ, σ "x" + 1]) (P (n + 1)) IncLoLang.LogicType.ok, {
+    intro n,
+    exact IncorrectnessProof.consequence (P n) _ (P n) (P (n + 1)) (by { intro _, exact id, }) (H2 n) (H1 n),
+  },
+
+  have H4 := IncorrectnessProof.backwards_variant H3, 
+
+  apply IncorrectnessProof.soundness,
+  exact IncorrectnessProof.consequence (P 0) _ _ _ (by { intros σ hσ, exact hσ, }) (by { intros σ hσ, use 5, exact hσ, }) H4,
+end
+
 /-! ## Completeness -/
 
-lemma IncorectnessProof.completeness.star_case_ok (C: IncLoLang.stmt)
+lemma IncorrectnessProof.completeness.star_case_ok (C: IncLoLang.stmt)
 (hC: ∀ (P Q : IncLoLang.prop) (ty : IncLoLang.LogicType), ([* P *] C [* ty: Q *]) → IncorrectnessProof P C Q ty) :
 ∀ (P Q : IncLoLang.prop), ([* P *] C** [* IncLoLang.LogicType.ok: Q *]) → IncorrectnessProof P (C**) Q IncLoLang.LogicType.ok :=
 begin
@@ -158,20 +189,20 @@ begin
   refine IncorrectnessProof.consequence P _ P Q (by {intro _, exact id,}) Hpq X,
 end
 
-lemma IncorectnessProof.completeness.star_case (C: IncLoLang.stmt)
+lemma IncorrectnessProof.completeness.star_case (C: IncLoLang.stmt)
 (hC: ∀ (P Q : IncLoLang.prop) (ty : IncLoLang.LogicType), ([* P *] C [* ty: Q *]) → IncorrectnessProof P C Q ty) :
 ∀ (P Q : IncLoLang.prop) (ty : IncLoLang.LogicType), ([* P *] C** [* ty: Q *]) → IncorrectnessProof P (C**) Q ty :=
 begin
   intros P Q ty h,
   cases ty,
   case ok {
-    exact IncorectnessProof.completeness.star_case_ok C hC P Q h,
+    exact IncorrectnessProof.completeness.star_case_ok C hC P Q h,
   },
   case er {
     -- let P' : ℕ → IncLoLang.prop := λ n, λ σ', ∃ σ, P σ ∧ IncLoLang.lang_semantics (IncLoLang.repeat C n) IncLoLang.LogicType.ok σ σ',
     let frontier := IncLogic.post IncLoLang.LogicType.ok (C**) P,
     have H: [* P *] C** [* IncLoLang.LogicType.ok: frontier *], { intros σ hσ, exact hσ, },
-    have X := IncorectnessProof.completeness.star_case_ok C hC P frontier H,
+    have X := IncorrectnessProof.completeness.star_case_ok C hC P frontier H,
 
     have H₂: [* frontier *]C[* IncLoLang.LogicType.er: Q *], {
       intros σ hσ,
@@ -213,7 +244,7 @@ begin
   }
 end
 
-theorem IncorectnessProof.completeness {P Q: IncLoLang.prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}:
+theorem IncorrectnessProof.completeness {P Q: IncLoLang.prop} {C: IncLoLang.stmt} {ty: IncLoLang.LogicType}:
   ([* P *]C[* ty: Q *]) → IncorrectnessProof P C Q ty :=
 begin
   revert P Q ty,
@@ -223,10 +254,10 @@ begin
     C₁ C₂ hC₁ hC₂ 
     C₁ C₂ hC₁ hC₂
     j k,
-  case IncLoLang.stmt.skip {
+  case IncLoLang.stmt.skip { -- The case [P]skip[ε: Q]
     intros P Q ty h,
     cases ty,
-    {
+    case er { -- The case [P]skip[er: Q]
       -- seek that Q is (λ _, false)
       have H: Q = λ _, false, {
         by_contra hQ,
@@ -244,10 +275,10 @@ begin
         cases hls,
       },
       rw H,
-      exact IncorrectnessProof.unit_er,
+      exact IncorrectnessProof.empty_under_approx,
     },
-    {
-      have Hpq: ∀ σ, Q σ → P σ, {
+    case ok { -- the case [P]skip[ok: Q]
+      have Hpq: ∀ σ, Q σ → P σ, { -- Seek Q → P
         intros σ hqσ,
         specialize h σ hqσ, 
         rcases h with ⟨σ', ⟨ hp, hls ⟩⟩,
@@ -255,13 +286,14 @@ begin
         exact hp,
       },
 
+      -- Consequence combines with the skip rule
       exact IncorrectnessProof.consequence Q Q P Q Hpq (by {intro x, exact id,}) (by {exact IncorrectnessProof.unit_ok,}),
     },
   },
   case IncLoLang.stmt.assign {
     intros P Q ty h,
     cases ty,
-    {
+    case er { -- The case [P]x ↣ e[er: Q]
       -- seek that Q is (λ _, false)
       have H: Q = λ _, false, {
         by_contra hQ,
@@ -279,9 +311,9 @@ begin
         cases hls,
       },
       rw H,
-      exact IncorrectnessProof.assignment_er,
+      exact IncorrectnessProof.empty_under_approx,
     },
-    {
+    case ok { -- The case [P]x ↣ e[ok: Q]
       have Hpq: ∀ σ, Q σ → (λ σ', ∃ (x' : ℤ), P{x ↣ x'} σ' ∧ σ' x = e (σ'{x ↦ x'})) σ, {
         simp,
         intros σ hqσ,
@@ -295,7 +327,7 @@ begin
         { simp, }
       },
 
-      refine IncorrectnessProof.consequence P _ P Q (by {intro x, exact id,}) Hpq (IncorrectnessProof.assignment_ok),
+      refine IncorrectnessProof.consequence P _ P Q (by {intro x, exact id,}) Hpq (IncorrectnessProof.assignment_ok _ _ _),
     },
   },
   case IncLoLang.stmt.non_det_assign {
@@ -319,7 +351,7 @@ begin
         cases hls,
       },
       rw H,
-      exact IncorrectnessProof.non_det_assignment_er,
+      exact IncorrectnessProof.empty_under_approx,
     },
     {
       have Hpq: ∀ σ, Q σ → (λ σ', ∃ (v : ℤ), P{x ↣ v} σ') σ, {
@@ -440,7 +472,7 @@ begin
     refine IncorrectnessProof.consequence P _ P Q (by {intro x, exact id,}) H X,
   },
   case IncLoLang.stmt.star {
-    exact IncorectnessProof.completeness.star_case j (by { intros P Q ty, exact k, }),
+    exact IncorrectnessProof.completeness.star_case j (by { intros P Q ty, exact k, }),
   },
   case IncLoLang.stmt.error {
     intros P Q ty h,
@@ -474,7 +506,7 @@ begin
         cases hls,
       },
       rw H,
-      exact IncorrectnessProof.error_ok,
+      exact IncorrectnessProof.empty_under_approx,
     },
   },
   case IncLoLang.stmt.assumes {
@@ -499,7 +531,7 @@ begin
         cases hls,
       },
       rw H,
-      exact IncorrectnessProof.assume_er,
+      exact IncorrectnessProof.empty_under_approx,
     },
     {
       have Hpq: ∀ σ, Q σ → P σ ∧ C σ, {
@@ -509,10 +541,11 @@ begin
         cases hls,
         exact ⟨hp, hls_h⟩,
       },
-
       exact IncorrectnessProof.consequence P (λ σ, P σ ∧ C σ) P Q (by {intro x, exact id,}) Hpq IncorrectnessProof.assume_ok,
     },
   },
 end
 
-end IncorrectnessCompleteness
+-- #print IncorrectnessProof.completeness
+
+end IncCompleteness

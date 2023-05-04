@@ -8,8 +8,8 @@ inductive lang : Type
 | assign          : string → IncLoLang.expression → lang
 | non_det_assign  : string → lang
 | seq             : lang → lang → lang
-| if_             : IncLoLang.expression → lang → lang → lang
-| loop_           : IncLoLang.expression → lang → lang
+| if_             : IncLoLang.prop → lang → lang → lang
+| loop_           : IncLoLang.prop → lang → lang
 | error           : lang
 
 def lang.to_stmt : lang → IncLoLang.stmt 
@@ -17,24 +17,25 @@ def lang.to_stmt : lang → IncLoLang.stmt
 | (lang.assign s e) := IncLoLang.stmt.assign s e
 | (lang.non_det_assign s) := IncLoLang.stmt.non_det_assign s
 | (lang.seq C₁ C₂) := IncLoLang.stmt.seq (C₁.to_stmt) (C₂.to_stmt)
-| (lang.if_ e bt bf) := (IncLoLang.stmt.assumes (λ st, (e st: ℤ) = 0) ;; (bt.to_stmt)) <+> (IncLoLang.stmt.assumes (λ st, (e st: ℤ) ≠ 0) ;; (bf.to_stmt))
-| (lang.loop_ e l) := (IncLoLang.stmt.assumes (λ st, (e st: ℤ) = 0) ;; (l.to_stmt))** ;; IncLoLang.stmt.assumes (λ st, (e st: ℤ) ≠ 0)
+| (lang.if_ p bt bf) := (IncLoLang.stmt.assumes p ;; (bt.to_stmt)) <+> (IncLoLang.stmt.assumes (λ st, ¬ p st) ;; (bf.to_stmt))
+| (lang.loop_ p l) := (IncLoLang.stmt.assumes (λ st, (p st)) ;; (l.to_stmt))** ;; IncLoLang.stmt.assumes (λ st, ¬ (p  st))
 | lang.error := IncLoLang.stmt.error
 
 notation a `;>` b := lang.seq a b
 
-def loop1 : IncLoLang.stmt :=
+def loop0 : IncLoLang.stmt :=
   (
     lang.non_det_assign "n" ;> 
     lang.assign "x" (λ _, 0) ;> 
-    lang.loop_ (λ σ, if (σ "n": ℤ) > 0 then (0: ℤ) else (1: ℤ)) (
+    lang.loop_ (λ σ, σ "n" > 0) (
       lang.assign "x" (λ σ, σ "x" + σ "n") ;>
       lang.non_det_assign "n"
     )
   ).to_stmt
 
+
 lemma ex_pt_1 : [* λ σ, σ "x" = 0 *]
-      (IncLoLang.stmt.assumes (λ (st : IncLoLang.state), ite (st "n" > 0) (0: ℤ) (1: ℤ) = 0) ;;
+      (IncLoLang.stmt.assumes (λ (st : IncLoLang.state), st "n" > 0) ;;
          (lang.assign "x" (λ (σ : IncLoLang.state), σ "x" + σ "n");>lang.non_det_assign "n").to_stmt)** [* IncLoLang.LogicType.ok: λ σ , σ "x" > 0 *] := 
 begin
   apply IncLogic.iterate_non_zero_incorrect,
@@ -45,14 +46,14 @@ begin
   {
     apply IncLogic.seq_normal_incorrect (λ σ, σ "x" = 0 ∧ σ "n" > 0),
     {
-      have X := IncLogic.assume_incorrect_ok (λ σ, σ "x" = 0) (λ σ, ite (σ "n" > 0) 0 1 = 0),
+      have X := IncLogic.assume_incorrect_ok (λ σ, σ "x" = 0) (λ σ, σ "n" > 0),
       simp at X ⊢,
       apply IncLogic.consequence_incorrect X,
       { 
         intros σ hσ, 
         split,
         finish,
-        exact ((lt_iff_not_ge 0 (σ "n")).1 hσ.right),
+        exact hσ.right,
       }, 
       { intros σ, finish, },
     },
@@ -99,7 +100,7 @@ begin
 end
 
 lemma ex_pt_2 : [* λ σ, σ "x" = 0 *]
-      (IncLoLang.stmt.assumes (λ (st : IncLoLang.state), ite (st "n" > 0) (0:ℤ) (1:ℤ) = 0) ;;
+      (IncLoLang.stmt.assumes (λ (st : IncLoLang.state), st "n" > 0) ;;
          (lang.assign "x" (λ (σ : IncLoLang.state), σ "x" + σ "n");>lang.non_det_assign "n").to_stmt)** [* IncLoLang.LogicType.ok: λ σ , σ "x" = 0 ∧ σ "n" ≤ 0 *] := 
 begin
   apply IncLogic.consequence_incorrect (IncLogic.iterate_zero_incorrect (λ σ, σ "x" = 0)),
@@ -107,9 +108,11 @@ begin
   { intros σ hσ, exact hσ, }
 end
 
-example: [* (λ _, true) *]loop1[* IncLoLang.LogicType.ok: λ σ, σ "x" ≥ 0 ∧ σ "n" ≤ 0 *] :=
+example: [* (λ _, true) *]loop0[* IncLoLang.LogicType.ok: λ σ, σ "x" ≥ 0 ∧ σ "n" ≤ 0 *] :=
 begin
-  unfold loop1,
+  unfold loop0,
+  repeat {rw lang.to_stmt},
+  
   apply IncLogic.seq_normal_incorrect (λ σ, σ "x" = 0),
   {
     -- Prove starting assumption
@@ -121,7 +124,6 @@ begin
       { finish, }
     },
     {
-      rw lang.to_stmt,
       have X := IncLogic.assignment_correct (λ _, true) "x" (λ _, 0),
       apply IncLogic.consequence_incorrect X,
       {
@@ -134,12 +136,10 @@ begin
     }
   },
   {
-    rw lang.to_stmt,
-
     apply IncLogic.seq_normal_incorrect (λ σ, σ "x" > 0 ∨ (σ "x" = 0 ∧ σ "n" ≤ 0) ),
     {
       apply IncLogic.consequence_incorrect (
-        IncLogic.disjunction_incorrect (λ σ, σ "x" = 0) (λ σ, σ "x" = 0) (λ σ, σ "x" > 0) (λ σ, σ "x" = 0 ∧ σ "n" ≤ 0) ((IncLoLang.stmt.assumes (λ (st : IncLoLang.state), ite (st "n" > 0) (0: ℤ) (1: ℤ) = 0) ;;
+        IncLogic.disjunction_incorrect (λ σ, σ "x" = 0) (λ σ, σ "x" = 0) (λ σ, σ "x" > 0) (λ σ, σ "x" = 0 ∧ σ "n" ≤ 0) ((IncLoLang.stmt.assumes (λ (st : IncLoLang.state), st "n" > 0) ;;
          (lang.assign "x" (λ (σ : IncLoLang.state), σ "x" + σ "n");>lang.non_det_assign "n").to_stmt)**) IncLoLang.LogicType.ok ex_pt_1 ex_pt_2
       ),
       {
@@ -152,7 +152,7 @@ begin
       },
     },
     {
-      apply IncLogic.consequence_incorrect (IncLogic.assume_incorrect_ok (λ σ, σ "x" > 0 ∨ (σ "x" = 0 ∧ σ "n" ≤ 0)) (λ (st : IncLoLang.state), ite (st "n" > 0) (0: ℤ) (1 : ℤ) ≠ 0)),
+      apply IncLogic.consequence_incorrect (IncLogic.assume_incorrect_ok (λ σ, σ "x" > 0 ∨ (σ "x" = 0 ∧ σ "n" ≤ 0)) (λ (st : IncLoLang.state), ¬ st "n" > 0)),
       {
         intros σ hσ,
         split,
